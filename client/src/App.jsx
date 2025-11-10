@@ -10,6 +10,10 @@ import StudentsList from "./pages/StudentsList";
 import ProfessorsList from "./pages/ProffessorList";
 import GradeManagement from "./pages/GradeManagement";
 import StudentGrades from "./pages/StudentGrades";
+import ChallengeGrade from "./pages/ChallengeGrade";
+import StudentChallenges from "./pages/StudentChallenges";
+import ProfessorChallenges from "./pages/ProfessorChallenges";
+import ChangePassword from "./pages/ChangePassword";
 
 
 export default function App() {
@@ -93,6 +97,44 @@ export default function App() {
   element={
     <ProtectedRoute allowedRoles={["student"]}>
       <StudentGrades />
+    </ProtectedRoute>
+  }
+/>
+
+{/* ---------- Grade Challenges ---------- */}
+<Route
+  path="/student/challenge/:gradeId"
+  element={
+    <ProtectedRoute allowedRoles={["student"]}>
+      <ChallengeGrade />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/student/challenges"
+  element={
+    <ProtectedRoute allowedRoles={["student"]}>
+      <StudentChallenges />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/professor/challenges"
+  element={
+    <ProtectedRoute allowedRoles={["professor"]}>
+      <ProfessorChallenges />
+    </ProtectedRoute>
+  }
+/>
+
+{/* ---------- Change Password (All authenticated users) ---------- */}
+<Route
+  path="/change-password"
+  element={
+    <ProtectedRoute allowedRoles={["admin", "professor", "student"]}>
+      <ChangePassword />
     </ProtectedRoute>
   }
 />

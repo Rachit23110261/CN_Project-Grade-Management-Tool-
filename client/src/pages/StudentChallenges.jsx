@@ -1,0 +1,229 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import Navbar from "../components/Navbar";
+
+export default function StudentChallenges() {
+  const [challenges, setChallenges] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchChallenges();
+  }, []);
+
+  const fetchChallenges = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get("http://localhost:5000/api/challenges/student", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setChallenges(res.data);
+    } catch (err) {
+      console.error("Failed to fetch challenges:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    const styles = {
+      pending: "bg-yellow-100 text-yellow-800",
+      reviewed: "bg-blue-100 text-blue-800",
+      resolved: "bg-green-100 text-green-800",
+    };
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    );
+  };
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">My Grade Challenges</h1>
+            <p className="text-gray-600 mt-2">Track your grade challenge submissions and professor responses</p>
+          </div>
+
+          {challenges.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-md p-12 text-center">
+              <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No challenges yet</h3>
+              <p className="text-gray-600 mb-4">You haven't submitted any grade challenges.</p>
+              <button
+                onClick={() => navigate("/student/courses")}
+                className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition"
+              >
+                View My Courses
+              </button>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {challenges.map((challenge) => (
+                <div
+                  key={challenge._id}
+                  className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition cursor-pointer"
+                  onClick={() => setSelectedChallenge(challenge)}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        {challenge.course?.name}
+                      </h3>
+                      <p className="text-sm text-gray-500">{challenge.course?.code}</p>
+                    </div>
+                    {getStatusBadge(challenge.status)}
+                  </div>
+
+                  <p className="text-gray-700 mb-4 line-clamp-2">{challenge.description}</p>
+
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span>Submitted {new Date(challenge.createdAt).toLocaleDateString()}</span>
+                    {challenge.respondedAt && (
+                      <span className="text-indigo-600 font-medium">Response received</span>
+                    )}
+                  </div>
+
+                  {challenge.attachmentName && (
+                    <div className="mt-3 flex items-center text-sm text-gray-600">
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      {challenge.attachmentName}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Challenge Detail Modal */}
+      {selectedChallenge && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedChallenge(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">{selectedChallenge.course?.name}</h3>
+                <p className="text-indigo-100 text-sm">{selectedChallenge.course?.code}</p>
+              </div>
+              <button
+                onClick={() => setSelectedChallenge(null)}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <p className="text-sm text-gray-500">Status</p>
+                  {getStatusBadge(selectedChallenge.status)}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Submitted</p>
+                  <p className="font-medium text-gray-900">
+                    {new Date(selectedChallenge.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-900 mb-2">Grade Details</h4>
+                <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Midterm</p>
+                    <p className="font-semibold">{selectedChallenge.grade?.midterm || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Endterm</p>
+                    <p className="font-semibold">{selectedChallenge.grade?.endterm || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Assignment</p>
+                    <p className="font-semibold">{selectedChallenge.grade?.assignment || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Total</p>
+                    <p className="font-semibold text-indigo-600">{selectedChallenge.grade?.total || "N/A"}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h4 className="font-semibold text-gray-900 mb-2">Your Challenge</h4>
+                <p className="text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-4">
+                  {selectedChallenge.description}
+                </p>
+              </div>
+
+              {selectedChallenge.attachmentName && (
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-2">Attachment</h4>
+                  <div className="flex items-center space-x-2 text-indigo-600">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                    <span>{selectedChallenge.attachmentName}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedChallenge.professorResponse && (
+                <div className="border-t pt-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-semibold text-gray-900">Professor's Response</h4>
+                    <p className="text-sm text-gray-500">
+                      {new Date(selectedChallenge.respondedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="bg-indigo-50 border-l-4 border-indigo-600 rounded-lg p-4">
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {selectedChallenge.professorResponse}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!selectedChallenge.professorResponse && selectedChallenge.status === "pending" && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+                  <p className="text-yellow-800 text-sm">
+                    Your challenge is pending review. You'll be notified when the professor responds.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
