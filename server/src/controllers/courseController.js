@@ -65,4 +65,57 @@ export const joinCourse = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Get a single course by ID
+export const getCourseById = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId)
+      .populate("professor", "name email")
+      .populate("students", "name email");
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update a course (professor only)
+export const updateCourse = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if the logged-in professor owns this course
+    if (course.professor.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Not authorized to edit this course" });
+    }
+    
+    // Validate policy if provided
+    if (req.body.policy) {
+      const total = Object.values(req.body.policy).reduce((a, b) => a + b, 0);
+      if (total !== 100) {
+        return res.status(400).json({ message: "Policy percentages must total 100%" });
+      }
+    }
+    
+    // Update course fields
+    if (req.body.name) course.name = req.body.name;
+    if (req.body.code) course.code = req.body.code;
+    if (req.body.description) course.description = req.body.description;
+    if (req.body.policy) course.policy = req.body.policy;
+    
+    await course.save();
+    
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
   

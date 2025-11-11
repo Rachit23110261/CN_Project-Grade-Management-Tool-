@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import StudentCourses from "./pages/StudentCourses";
 import ProfessorCourses from "./pages/ProffessorCourses";
 import CreateCourse from "./pages/CreateCourse";
+import EditCourse from "./pages/EditCourse";
 import AdminPanel from "./pages/AdminPanel";
 import AdminRegister from "./pages/AdminRegister";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -51,6 +52,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["professor"]}>
                 <CreateCourse />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/professor/edit-course/:courseId"
+            element={
+              <ProtectedRoute allowedRoles={["professor"]}>
+                <EditCourse />
               </ProtectedRoute>
             }
           />

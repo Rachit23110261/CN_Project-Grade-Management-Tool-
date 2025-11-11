@@ -9,6 +9,7 @@ export default function StudentGrades() {
   const [grades, setGrades] = useState(null);
   const [gradeId, setGradeId] = useState(null);
   const [courseName, setCourseName] = useState("");
+  const [coursePolicy, setCoursePolicy] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,6 +20,7 @@ export default function StudentGrades() {
 
         const { course, studentGrades } = res.data;
         setCourseName(course?.name || "Course");
+        setCoursePolicy(course?.policy || {});
 
         if (Array.isArray(studentGrades) && studentGrades.length > 0) {
           setGrades(studentGrades[0].marks);
@@ -36,6 +38,33 @@ export default function StudentGrades() {
 
     fetchGrades();
   }, [courseId]);
+
+  // Filter assessments to only show those with policy > 0 AND score > 0
+  const getVisibleAssessments = () => {
+    if (!grades || !coursePolicy) return [];
+    return Object.entries(grades).filter(([key, value]) => {
+      const policyWeight = coursePolicy[key] || 0;
+      const score = typeof value === 'number' ? value : 0;
+      return policyWeight > 0 && score > 0;
+    });
+  };
+
+  // Calculate weighted score contribution for an assessment
+  const calculateWeightedScore = (score, key) => {
+    const policyWeight = coursePolicy[key] || 0;
+    return (score / 100) * policyWeight;
+  };
+
+  // Calculate total weighted score
+  const calculateTotalWeightedScore = () => {
+    const visibleAssessments = getVisibleAssessments();
+    if (visibleAssessments.length === 0) return 0;
+    
+    return visibleAssessments.reduce((total, [key, value]) => {
+      const score = typeof value === 'number' ? value : 0;
+      return total + calculateWeightedScore(score, key);
+    }, 0).toFixed(2);
+  };
 
   const calculateAverage = (gradesObj) => {
     if (!gradesObj) return 0;
@@ -77,6 +106,8 @@ export default function StudentGrades() {
   }
 
   const average = calculateAverage(grades);
+  const totalWeightedScore = calculateTotalWeightedScore();
+  const visibleAssessments = getVisibleAssessments();
 
   return (
     <>
@@ -114,8 +145,8 @@ export default function StudentGrades() {
                     </button>
                   )}
                   <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-4 text-white text-center">
-                    <div className="text-3xl font-bold">{average}</div>
-                    <div className="text-sm opacity-90">Average</div>
+                    <div className="text-3xl font-bold">{totalWeightedScore}%</div>
+                    <div className="text-sm opacity-90">Weighted Score</div>
                   </div>
                 </div>
               </div>
@@ -130,8 +161,8 @@ export default function StudentGrades() {
                 <div className="bg-white rounded-xl shadow-lg p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-gray-600 text-sm font-medium">Total Assessments</p>
-                      <p className="text-3xl font-bold text-gray-900 mt-1">{Object.keys(grades).length}</p>
+                      <p className="text-gray-600 text-sm font-medium">Graded Assessments</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-1">{visibleAssessments.length}</p>
                     </div>
                     <div className="bg-blue-100 rounded-full p-3">
                       <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -144,10 +175,10 @@ export default function StudentGrades() {
                 <div className="bg-white rounded-xl shadow-lg p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-gray-600 text-sm font-medium">Letter Grade</p>
-                      <p className="text-3xl font-bold text-gray-900 mt-1">{getLetterGrade(average)}</p>
+                      <p className="text-gray-600 text-sm font-medium">Total Weighted Score</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-1">{totalWeightedScore}%</p>
                     </div>
-                    <div className={`rounded-full p-3 ${getGradeColor(average)}`}>
+                    <div className={`rounded-full p-3 ${getGradeColor(totalWeightedScore)}`}>
                       <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
@@ -160,12 +191,12 @@ export default function StudentGrades() {
                     <div>
                       <p className="text-gray-600 text-sm font-medium">Status</p>
                       <p className="text-lg font-bold text-green-600 mt-1">
-                        {average >= 60 ? 'Passing' : 'Needs Improvement'}
+                        {totalWeightedScore >= 60 ? 'Passing' : visibleAssessments.length === 0 ? 'Pending' : 'Needs Improvement'}
                       </p>
                     </div>
-                    <div className={`rounded-full p-3 ${average >= 60 ? 'bg-green-100' : 'bg-red-100'}`}>
-                      <svg className={`w-8 h-8 ${average >= 60 ? 'text-green-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={average >= 60 ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"} />
+                    <div className={`rounded-full p-3 ${totalWeightedScore >= 60 ? 'bg-green-100' : visibleAssessments.length === 0 ? 'bg-gray-100' : 'bg-red-100'}`}>
+                      <svg className={`w-8 h-8 ${totalWeightedScore >= 60 ? 'text-green-600' : visibleAssessments.length === 0 ? 'text-gray-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={totalWeightedScore >= 60 ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"} />
                       </svg>
                     </div>
                   </div>
@@ -179,48 +210,70 @@ export default function StudentGrades() {
                 </div>
                 
                 <div className="p-6">
-                  <div className="space-y-4">
-                    {Object.entries(grades).map(([key, value], index) => {
-                      const score = typeof value === 'number' ? value : 0;
-                      const displayValue = score === 0 ? "-" : value;
-                      return (
-                        <div key={index} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center space-x-3">
-                              <div className="bg-indigo-100 rounded-lg p-2">
-                                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
+                  {visibleAssessments.length > 0 ? (
+                    <div className="space-y-4">
+                      {visibleAssessments.map(([key, value], index) => {
+                        const score = typeof value === 'number' ? value : 0;
+                        const displayValue = score === 0 ? "-" : value;
+                        const policyWeight = coursePolicy[key] || 0;
+                        const weightedContribution = calculateWeightedScore(score, key);
+                        
+                        return (
+                          <div key={index} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-3">
+                                <div className="bg-indigo-100 rounded-lg p-2">
+                                  <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </div>
+                                <div>
+                                  <h3 className="text-lg font-semibold text-gray-900 capitalize">
+                                    {key.replace(/_/g, ' ')}
+                                  </h3>
+                                  <div className="flex items-center space-x-3 text-sm text-gray-600 mt-1">
+                                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                      Weightage: {policyWeight}%
+                                    </span>
+                                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                                      Contribution: {weightedContribution.toFixed(2)}%
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <h3 className="text-lg font-semibold text-gray-900 capitalize">
-                                  {key.replace(/_/g, ' ')}
-                                </h3>
+                              
+                              <div className="flex items-center space-x-4">
+                                <span className={`px-4 py-2 rounded-full text-sm font-bold ${getGradeColor(score)}`}>
+                                  {getLetterGrade(score)}
+                                </span>
+                                <span className="text-3xl font-bold text-gray-900">{displayValue}</span>
+                                {score > 0 && <span className="text-gray-500 text-sm">/100</span>}
                               </div>
                             </div>
                             
-                            <div className="flex items-center space-x-4">
-                              <span className={`px-4 py-2 rounded-full text-sm font-bold ${getGradeColor(score)}`}>
-                                {getLetterGrade(score)}
-                              </span>
-                              <span className="text-3xl font-bold text-gray-900">{displayValue}</span>
-                              {score > 0 && <span className="text-gray-500 text-sm">/100</span>}
-                            </div>
+                            {/* Progress Bar */}
+                            {score > 0 && (
+                              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                <div 
+                                  className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500"
+                                  style={{ width: `${score}%` }}
+                                ></div>
+                              </div>
+                            )}
                           </div>
-                          
-                          {/* Progress Bar - only show if score > 0 */}
-                          {score > 0 && (
-                            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                              <div 
-                                className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500"
-                                style={{ width: `${score}%` }}
-                              ></div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="bg-gray-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-gray-600">No graded assessments to display yet.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </>

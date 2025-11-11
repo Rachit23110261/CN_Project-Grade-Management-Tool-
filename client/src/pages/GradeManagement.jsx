@@ -71,53 +71,69 @@ export default function GradeManagement() {
 
   if (loading) return <p>Loading...</p>;
 
+  // Get only active components (policy > 0)
+  const activeComponents = Object.keys(course.policy).filter(key => course.policy[key] > 0);
+
   return (
     <>
       <Navbar />
       <div className="p-8">
         <h1 className="text-2xl font-bold mb-4">{course.name} - Grade Management</h1>
-        <table className="w-full border">
-          <thead>
-            <tr>
-              <th className="border p-2">Student</th>
-              {Object.keys(course.policy).map(key => (
-                <th key={key} className="border p-2">{key.toUpperCase()}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Object.keys(grades).map(studentId => {
-              const student = course.students.find(s => s._id === studentId);
-              return (
-                <tr key={studentId}>
-                  <td className="border p-2">
-                    <div className="font-semibold">{student?.name}</div>
-                    <div className="text-xs text-gray-500">{student?.email}</div>
-                    <div className="text-xs text-gray-400 font-mono">ID: {studentId.slice(-6)}</div>
-                  </td>
-                  {Object.keys(course.policy).map(key => (
-                    <td key={key} className="border p-2">
-                      <input
-                        type="number"
-                        min={0}
-                        max={course.policy[key]}
-                        value={grades[studentId]?.[key] || 0}
-                        onChange={(e) => handleChange(studentId, key, e.target.value)}
-                        className="w-full border rounded p-1"
-                      />
-                    </td>
+        {activeComponents.length === 0 ? (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg">
+            <p>⚠️ No active components in this course. Please edit the course to add grading components.</p>
+          </div>
+        ) : (
+          <>
+            <table className="w-full border">
+              <thead>
+                <tr>
+                  <th className="border p-2">Student</th>
+                  {activeComponents.map(key => (
+                    <th key={key} className="border p-2">
+                      {key.toUpperCase()}
+                      <div className="text-xs font-normal text-gray-500">({course.policy[key]}%)</div>
+                    </th>
                   ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <button
-          onClick={handleSave}
-          className="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-        >
-          Save Grades
-        </button>
+              </thead>
+              <tbody>
+                {Object.keys(grades).map(studentId => {
+                  const student = course.students.find(s => s._id === studentId);
+                  return (
+                    <tr key={studentId}>
+                      <td className="border p-2">
+                        <div className="font-semibold">{student?.name}</div>
+                        <div className="text-xs text-gray-500">{student?.email}</div>
+                        <div className="text-xs text-gray-400 font-mono">ID: {studentId.slice(-6)}</div>
+                      </td>
+                      {activeComponents.map(key => (
+                        <td key={key} className="border p-2">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={grades[studentId]?.[key] || 0}
+                            onChange={(e) => handleChange(studentId, key, e.target.value)}
+                            className="w-full border rounded p-1"
+                            data-student-id={studentId}
+                            data-field={key}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <button
+              onClick={handleSave}
+              className="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+            >
+              Save Grades
+            </button>
+          </>
+        )}
       </div>
     </>
   );
