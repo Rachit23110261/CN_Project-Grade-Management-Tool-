@@ -96,7 +96,7 @@ export default function Login() {
                   </div>
                   <input
                     type="email"
-                    placeholder="student@iitgn.ac.in"
+                    placeholder="username@iitgn.ac.in"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-200"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -225,7 +225,7 @@ export default function Login() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
                     <input
                       type="email"
-                      placeholder="student@iitgn.ac.in"
+                      placeholder="username@iitgn.ac.in"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
