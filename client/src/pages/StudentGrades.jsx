@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import axios from "axios";
+import api from "../api/axios";
 
 export default function StudentGrades() {
   const { courseId } = useParams();
@@ -14,10 +14,7 @@ export default function StudentGrades() {
   useEffect(() => {
     const fetchGrades = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(`http://localhost:5000/api/grades/${courseId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await api.get(`/grades/${courseId}`);
 
         const { course, studentGrades } = res.data;
         setCourseName(course?.name || "Course");

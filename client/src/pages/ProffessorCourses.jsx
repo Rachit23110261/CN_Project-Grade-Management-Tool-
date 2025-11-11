@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
-import axios from "axios";
+import api from "../api/axios";
 import { useNavigate } from "react-router-dom";
 
 export default function ProfessorCourses() {
@@ -24,10 +24,7 @@ export default function ProfessorCourses() {
   // Fetch professor's own courses
   const fetchCourses = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/courses/my-courses", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/courses/my-courses");
       setCourses(res.data);
     } catch (err) {
       console.error(err);
@@ -42,19 +39,13 @@ export default function ProfessorCourses() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem("token");
-
       // Optional: Validate policy percentages add up to 100
       const total = Object.values(form.policy).reduce((a, b) => a + b, 0);
       if (total !== 100) {
         return alert("Total course policy percentages must add up to 100");
       }
 
-      await axios.post(
-        "http://localhost:5000/api/courses/create",
-        form,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.post("/courses/create", form);
       alert("Course created successfully!");
       setForm({
         name: "",

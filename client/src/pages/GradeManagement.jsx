@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import axios from "axios";
+import api from "../api/axios";
 
 export default function GradeManagement() {
   const { courseId } = useParams();
@@ -12,10 +12,7 @@ export default function GradeManagement() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(`http://localhost:5000/api/grades/${courseId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await api.get(`/grades/${courseId}`);
         setCourse(res.data.course);
 
         // Initialize grades
@@ -41,15 +38,7 @@ export default function GradeManagement() {
 
   const handleSave = async () => {
     try {
-      const token = localStorage.getItem("token");
-  
-      await axios.post(
-        `http://localhost:5000/api/grades/${courseId}`,
-        { grades }, // ✅ wrap grades in an object
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await api.post(`/grades/${courseId}`, { grades }); // ✅ wrap grades in an object
   
       alert("Grades saved successfully!");
     } catch (err) {

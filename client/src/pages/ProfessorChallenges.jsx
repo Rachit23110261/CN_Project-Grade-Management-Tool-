@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../api/axios";
 import Navbar from "../components/Navbar";
 
 export default function ProfessorChallenges() {
@@ -16,10 +16,7 @@ export default function ProfessorChallenges() {
 
   const fetchChallenges = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/challenges/professor", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/challenges/professor");
       setChallenges(res.data);
     } catch (err) {
       console.error("Failed to fetch challenges:", err);
@@ -34,12 +31,7 @@ export default function ProfessorChallenges() {
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `http://localhost:5000/api/challenges/${selectedChallenge._id}/respond`,
-        { response },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.put(`/challenges/${selectedChallenge._id}/respond`, { response });
 
       // Refresh challenges
       await fetchChallenges();

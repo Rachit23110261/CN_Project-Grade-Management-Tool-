@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 import Navbar from "../components/Navbar";
 
 export default function StudentChallenges() {
@@ -15,10 +15,7 @@ export default function StudentChallenges() {
 
   const fetchChallenges = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/challenges/student", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/challenges/student");
       setChallenges(res.data);
     } catch (err) {
       console.error("Failed to fetch challenges:", err);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
-import axios from "axios";
+import api from "../api/axios";
 import { useNavigate } from "react-router-dom";
 
 export default function StudentCourses() {
@@ -12,10 +12,7 @@ export default function StudentCourses() {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get("http://localhost:5000/api/courses", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await api.get("/courses");
 
         const enrolledIds = res.data.enrolledCourses.map((c) => c._id);
         const available = res.data.allCourses.filter(
@@ -35,19 +32,10 @@ export default function StudentCourses() {
 
   const handleJoin = async (id) => {
     try {
-      const token = localStorage.getItem("token");
-      await axios.post(
-        `http://localhost:5000/api/courses/${id}/join`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await api.post(`/courses/${id}/join`);
       alert("✓ Successfully joined the course!");
 
-      const res = await axios.get("http://localhost:5000/api/courses", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/courses");
       const enrolledIds = res.data.enrolledCourses.map((c) => c._id);
       setJoinedCourses(res.data.enrolledCourses);
       setAvailableCourses(

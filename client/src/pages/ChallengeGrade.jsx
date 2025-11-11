@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 import Navbar from "../components/Navbar";
 
 export default function ChallengeGrade() {
@@ -20,16 +20,10 @@ export default function ChallengeGrade() {
 
   const fetchGradeDetails = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const gradeRes = await axios.get(`http://localhost:5000/api/grades/${gradeId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const gradeRes = await api.get(`/grades/${gradeId}`);
       setGrade(gradeRes.data);
 
-      const courseRes = await axios.get(
-        `http://localhost:5000/api/courses/${gradeRes.data.course}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const courseRes = await api.get(`/courses/${gradeRes.data.course}`);
       setCourse(courseRes.data);
     } catch (err) {
       setError("Failed to load grade details");
@@ -61,8 +55,6 @@ export default function ChallengeGrade() {
     setError("");
 
     try {
-      const token = localStorage.getItem("token");
-      
       // For this implementation, we'll convert the file to base64 and store it
       // In production, you'd want to use proper file upload service (S3, Cloudinary, etc.)
       let attachmentData = null;
@@ -75,17 +67,13 @@ export default function ChallengeGrade() {
         });
       }
 
-      await axios.post(
-        "http://localhost:5000/api/challenges",
-        {
-          courseId: grade.course,
-          gradeId: gradeId,
-          description,
-          attachmentUrl: attachmentData,
-          attachmentName: attachment?.name || null,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.post("/challenges", {
+        courseId: grade.course,
+        gradeId: gradeId,
+        description,
+        attachmentUrl: attachmentData,
+        attachmentName: attachment?.name || null,
+      });
 
       setSuccess(true);
       setTimeout(() => navigate("/student/challenges"), 2000);
