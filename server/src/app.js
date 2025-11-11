@@ -22,7 +22,14 @@ connectDB();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://10.7.45.10:5173', 'http://192.168.0.1:5173'],
+  origin: [
+    'http://localhost:5173', 
+    'http://localhost:5174',
+    'http://10.7.45.10:5173', 
+    'http://10.7.45.10:5174',
+    'http://192.168.0.1:5173',
+    'http://192.168.0.1:5174'
+  ],
   credentials: true
 }));
 

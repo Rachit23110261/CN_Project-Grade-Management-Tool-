@@ -19,19 +19,35 @@ export const sendPasswordResetEmail = async (to, tempPassword) => {
     const mailOptions = {
       from: process.env.EMAIL_USER || "kaushal.bule@iitgn.ac.in",
       to,
-      subject: "Password Reset - Grade Management System",
+      subject: "Temporary Password - Grade Management System",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #4f46e5;">Password Reset Request</h2>
+          <h2 style="color: #4f46e5;">🔐 Temporary Password Generated</h2>
           <p>Hello,</p>
-          <p>You have requested to reset your password for the Grade Management System.</p>
-          <p>Your temporary password is:</p>
+          <p>You have requested a temporary password for the Grade Management System.</p>
+          <p><strong>Your temporary password is:</strong></p>
           <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <strong style="font-size: 18px; color: #1f2937;">${tempPassword}</strong>
           </div>
-          <p>Please use this temporary password to log in and change it immediately for security reasons.</p>
+          
+          <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #92400e;"><strong>⚠️ Important Security Notes:</strong></p>
+            <ul style="margin: 10px 0; padding-left: 20px; color: #92400e;">
+              <li><strong>Valid for 1 hour:</strong> This temporary password expires in 60 minutes</li>
+              <li><strong>Your original password is safe:</strong> Your main password has NOT been changed</li>
+              <li><strong>Two ways to use it:</strong>
+                <ul style="margin-top: 5px;">
+                  <li>Use it to login (you'll be redirected to change password)</li>
+                  <li>OR use it as "current password" when changing your password within 1 hour</li>
+                </ul>
+              </li>
+              <li><strong>Change password immediately:</strong> Set a new permanent password after logging in</li>
+              <li><strong>Can be used multiple times:</strong> Valid for 1 hour or until you change your password</li>
+            </ul>
+          </div>
+          
           <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
-            If you didn't request this password reset, please contact your administrator immediately.
+            If you didn't request this temporary password, please ignore this email or contact your administrator.
           </p>
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
@@ -42,7 +58,7 @@ export const sendPasswordResetEmail = async (to, tempPassword) => {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log("Password reset email sent:", info.messageId);
+    console.log("Temporary password email sent:", info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error("Error sending email:", error);

@@ -26,6 +26,13 @@ export default function Login() {
       const res = await api.post("/auth/login", { email, password });
       login(res.data.user, res.data.token);
 
+      // Check if user logged in with temporary password
+      if (res.data.usedTempPassword) {
+        alert("⚠️ You logged in with a temporary password. Please change your password immediately for security.");
+        navigate("/change-password", { state: { fromTempPassword: true } });
+        return;
+      }
+
       // Redirect based on role
       const role = res.data.user.role;
       if (role === "admin") navigate("/admin");
