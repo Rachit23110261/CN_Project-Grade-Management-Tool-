@@ -243,9 +243,6 @@ export default function StudentGrades() {
                               </div>
                               
                               <div className="flex items-center space-x-4">
-                                <span className={`px-4 py-2 rounded-full text-sm font-bold ${getGradeColor(score)}`}>
-                                  {getLetterGrade(score)}
-                                </span>
                                 <span className="text-3xl font-bold text-gray-900">{displayValue}</span>
                                 {score > 0 && <span className="text-gray-500 text-sm">/100</span>}
                               </div>
