@@ -158,19 +158,19 @@ export default function StudentChallenges() {
                 <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-4 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">Midterm</p>
-                    <p className="font-semibold">{selectedChallenge.grade?.midterm || "N/A"}</p>
+                    <p className="font-semibold">{selectedChallenge.grade?.midterm || "-"}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Endterm</p>
-                    <p className="font-semibold">{selectedChallenge.grade?.endterm || "N/A"}</p>
+                    <p className="font-semibold">{selectedChallenge.grade?.endterm || "-"}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Assignment</p>
-                    <p className="font-semibold">{selectedChallenge.grade?.assignment || "N/A"}</p>
+                    <p className="font-semibold">{selectedChallenge.grade?.assignment || "-"}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Total</p>
-                    <p className="font-semibold text-indigo-600">{selectedChallenge.grade?.total || "N/A"}</p>
+                    <p className="font-semibold text-indigo-600">{selectedChallenge.grade?.total || "-"}</p>
                   </div>
                 </div>
               </div>

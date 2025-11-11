@@ -38,12 +38,13 @@ export default function StudentGrades() {
 
   const calculateAverage = (gradesObj) => {
     if (!gradesObj) return 0;
-    const values = Object.values(gradesObj).filter(v => typeof v === 'number');
+    const values = Object.values(gradesObj).filter(v => typeof v === 'number' && v > 0);
     if (values.length === 0) return 0;
     return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2);
   };
 
   const getGradeColor = (score) => {
+    if (score === 0) return "text-gray-600 bg-gray-100";
     if (score >= 90) return "text-green-600 bg-green-100";
     if (score >= 80) return "text-blue-600 bg-blue-100";
     if (score >= 70) return "text-yellow-600 bg-yellow-100";
@@ -52,11 +53,12 @@ export default function StudentGrades() {
   };
 
   const getLetterGrade = (score) => {
+    if (score === 0) return "N.A.";
     if (score >= 90) return "A";
     if (score >= 80) return "B";
     if (score >= 70) return "C";
     if (score >= 60) return "D";
-    return "F";
+    return "N.A.";
   };
 
   if (loading) {
@@ -179,6 +181,7 @@ export default function StudentGrades() {
                   <div className="space-y-4">
                     {Object.entries(grades).map(([key, value], index) => {
                       const score = typeof value === 'number' ? value : 0;
+                      const displayValue = score === 0 ? "-" : value;
                       return (
                         <div key={index} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
                           <div className="flex items-center justify-between mb-3">
@@ -199,18 +202,20 @@ export default function StudentGrades() {
                               <span className={`px-4 py-2 rounded-full text-sm font-bold ${getGradeColor(score)}`}>
                                 {getLetterGrade(score)}
                               </span>
-                              <span className="text-3xl font-bold text-gray-900">{value}</span>
-                              <span className="text-gray-500 text-sm">/100</span>
+                              <span className="text-3xl font-bold text-gray-900">{displayValue}</span>
+                              {score > 0 && <span className="text-gray-500 text-sm">/100</span>}
                             </div>
                           </div>
                           
-                          {/* Progress Bar */}
-                          <div className="w-full bg-gray-200 rounded-full h-2.5">
-                            <div 
-                              className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500"
-                              style={{ width: `${score}%` }}
-                            ></div>
-                          </div>
+                          {/* Progress Bar - only show if score > 0 */}
+                          {score > 0 && (
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                              <div 
+                                className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500"
+                                style={{ width: `${score}%` }}
+                              ></div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

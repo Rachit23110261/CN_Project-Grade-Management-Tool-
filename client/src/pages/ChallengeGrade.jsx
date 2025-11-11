@@ -127,19 +127,19 @@ export default function ChallengeGrade() {
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Midterm</p>
-                      <p className="font-semibold text-gray-900">{grade.midterm || "N/A"}</p>
+                      <p className="font-semibold text-gray-900">{grade.midterm || "-"}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Endterm</p>
-                      <p className="font-semibold text-gray-900">{grade.endterm || "N/A"}</p>
+                      <p className="font-semibold text-gray-900">{grade.endterm || "-"}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Assignment</p>
-                      <p className="font-semibold text-gray-900">{grade.assignment || "N/A"}</p>
+                      <p className="font-semibold text-gray-900">{grade.assignment || "-"}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Total</p>
-                      <p className="font-semibold text-indigo-600 text-lg">{grade.total || "N/A"}</p>
+                      <p className="font-semibold text-indigo-600 text-lg">{grade.total || "-"}</p>
                     </div>
                   </div>
                 </div>
