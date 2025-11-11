@@ -17,18 +17,29 @@ export const getCourseGrades = async (req, res) => {
     // Merge students with grades
     const studentGrades = course.students.map(student => {
       const g = grades.find(grade => grade.student.toString() === student._id.toString());
+      // Create a new object for each student to avoid shared references
+      const marks = g ? {
+        midsem: g.marks.midsem || 0,
+        endsem: g.marks.endsem || 0,
+        quizzes: g.marks.quizzes || 0,
+        project: g.marks.project || 0,
+        assignment: g.marks.assignment || 0,
+        attendance: g.marks.attendance || 0,
+        participation: g.marks.participation || 0
+      } : {
+        midsem: 0,
+        endsem: 0,
+        quizzes: 0,
+        project: 0,
+        assignment: 0,
+        attendance: 0,
+        participation: 0
+      };
+      
       return {
         _id: student._id,
         name: student.name,
-        marks: g ? g.marks : {
-          midsem: 0,
-          endsem: 0,
-          quizzes: 0,
-          project: 0,
-          assignment: 0,
-          attendance: 0,
-          participation: 0
-        }
+        marks: marks
       };
     });
 
@@ -70,20 +81,30 @@ export const updateCourseGrades = async (req, res) => {
     const { courseId } = req.params;
   
     try {
+      console.log(`Fetching grades for student ${studentId} in course ${courseId}`);
+      
       const grade = await Grade.findOne({ student: studentId, course: courseId });
       const course = await Course.findById(courseId);
   
       if (!course) return res.status(404).json({ message: "Course not found" });
   
+      console.log("Found grade:", grade);
+      
       res.json({
         course: {
           name: course.name,
           code: course.code,
           policy: course.policy,
         },
+        studentGrades: grade ? [{
+          _id: grade._id,
+          name: req.user.name,
+          marks: grade.marks
+        }] : [],
         marks: grade ? grade.marks : null,
       });
     } catch (err) {
+      console.error("Error fetching student grades:", err);
       res.status(500).json({ message: err.message });
     }
   };

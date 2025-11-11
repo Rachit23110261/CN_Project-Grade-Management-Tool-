@@ -15,11 +15,19 @@ export default function GradeManagement() {
         const res = await api.get(`/grades/${courseId}`);
         setCourse(res.data.course);
 
-        // Initialize grades
+        // Initialize grades - create deep copy to avoid shared references
         const g = {};
         res.data.studentGrades.forEach(student => {
-          g[student._id] = student.marks;
+          // Create a new object for each student to avoid shared references
+          g[student._id] = { ...student.marks };
         });
+        
+        // Debug: Log each student's grade object reference
+        console.log("Initialized grades for students:");
+        Object.keys(g).forEach(studentId => {
+          console.log(`Student ${studentId}:`, g[studentId]);
+        });
+        
         setGrades(g);
         setLoading(false);
       } catch (err) {
@@ -30,15 +38,29 @@ export default function GradeManagement() {
   }, [courseId]);
 
   const handleChange = (studentId, key, value) => {
-    setGrades(prev => ({
-      ...prev,
-      [studentId]: { ...prev[studentId], [key]: Number(value) }
-    }));
+    console.log(`Changing grade for student ${studentId}, field ${key}, value ${value}`);
+    setGrades(prev => {
+      const updated = {
+        ...prev,
+        [studentId]: { 
+          ...prev[studentId], 
+          [key]: Number(value) || 0
+        }
+      };
+      console.log(`Updated grades:`, updated);
+      return updated;
+    });
   };
 
   const handleSave = async () => {
     try {
-      await api.post(`/grades/${courseId}`, { grades }); // ✅ wrap grades in an object
+      console.log("=== SAVING GRADES ===");
+      console.log("Total students:", Object.keys(grades).length);
+      Object.keys(grades).forEach(studentId => {
+        console.log(`Student ${studentId}:`, grades[studentId]);
+      });
+      
+      await api.post(`/grades/${courseId}`, { grades });
   
       alert("Grades saved successfully!");
     } catch (err) {
@@ -64,23 +86,30 @@ export default function GradeManagement() {
             </tr>
           </thead>
           <tbody>
-            {Object.keys(grades).map(studentId => (
-              <tr key={studentId}>
-                <td className="border p-2">{course.students.find(s => s._id === studentId)?.name}</td>
-                {Object.keys(course.policy).map(key => (
-                  <td key={key} className="border p-2">
-                    <input
-                      type="number"
-                      min={0}
-                      max={course.policy[key]}
-                      value={grades[studentId][key] || 0}
-                      onChange={(e) => handleChange(studentId, key, e.target.value)}
-                      className="w-full border rounded p-1"
-                    />
+            {Object.keys(grades).map(studentId => {
+              const student = course.students.find(s => s._id === studentId);
+              return (
+                <tr key={studentId}>
+                  <td className="border p-2">
+                    <div className="font-semibold">{student?.name}</div>
+                    <div className="text-xs text-gray-500">{student?.email}</div>
+                    <div className="text-xs text-gray-400 font-mono">ID: {studentId.slice(-6)}</div>
                   </td>
-                ))}
-              </tr>
-            ))}
+                  {Object.keys(course.policy).map(key => (
+                    <td key={key} className="border p-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={course.policy[key]}
+                        value={grades[studentId]?.[key] || 0}
+                        onChange={(e) => handleChange(studentId, key, e.target.value)}
+                        className="w-full border rounded p-1"
+                      />
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         <button

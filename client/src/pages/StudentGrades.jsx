@@ -14,7 +14,8 @@ export default function StudentGrades() {
   useEffect(() => {
     const fetchGrades = async () => {
       try {
-        const res = await api.get(`/grades/${courseId}`);
+        // Use student-specific endpoint
+        const res = await api.get(`/grades/student/${courseId}`);
 
         const { course, studentGrades } = res.data;
         setCourseName(course?.name || "Course");
