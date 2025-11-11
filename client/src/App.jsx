@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext";
 import Login from "./pages/Login";
 import StudentCourses from "./pages/StudentCourses";
 import ProfessorCourses from "./pages/ProffessorCourses";
+import CreateCourse from "./pages/CreateCourse";
 import AdminPanel from "./pages/AdminPanel";
 import AdminRegister from "./pages/AdminRegister";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -41,6 +42,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["professor"]}>
                 <ProfessorCourses />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/professor/create-course"
+            element={
+              <ProtectedRoute allowedRoles={["professor"]}>
+                <CreateCourse />
               </ProtectedRoute>
             }
           />

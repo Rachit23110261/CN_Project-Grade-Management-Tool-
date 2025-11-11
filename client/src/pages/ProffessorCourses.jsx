@@ -6,20 +6,6 @@ import { useNavigate } from "react-router-dom";
 export default function ProfessorCourses() {
   const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
-  const [form, setForm] = useState({
-    name: "",
-    code: "",
-    description: "",
-    policy: {
-      midsem: 0,
-      endsem: 0,
-      quizzes: 0,
-      project: 0,
-      assignment: 0,
-      attendance: 0,
-      participation: 0,
-    },
-  });
 
   // Fetch professor's own courses
   const fetchCourses = async () => {
@@ -35,101 +21,31 @@ export default function ProfessorCourses() {
     fetchCourses();
   }, []);
 
-  // Handle course creation
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      // Optional: Validate policy percentages add up to 100
-      const total = Object.values(form.policy).reduce((a, b) => a + b, 0);
-      if (total !== 100) {
-        return alert("Total course policy percentages must add up to 100");
-      }
-
-      await api.post("/courses/create", form);
-      alert("Course created successfully!");
-      setForm({
-        name: "",
-        code: "",
-        description: "",
-        policy: {
-          midsem: 0,
-          endsem: 0,
-          quizzes: 0,
-          project: 0,
-          assignment: 0,
-          attendance: 0,
-          participation: 0,
-        },
-      });
-      fetchCourses();
-    } catch (err) {
-      alert(err.response?.data?.message || "Error creating course");
-    }
-  };
-
   return (
     <>
       <Navbar />
       <div className="p-8">
-        <h1 className="text-2xl font-bold mb-6">Professor Dashboard</h1>
-
-        {/* Create Course Form */}
-        <div className="bg-white p-6 shadow-md rounded-xl mb-8 max-w-md">
-          <h2 className="text-lg font-semibold mb-4">Create a New Course</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="text"
-              placeholder="Course Name"
-              className="border p-2 rounded w-full"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-            <input
-              type="text"
-              placeholder="Course Code"
-              className="border p-2 rounded w-full"
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value })}
-              required
-            />
-            <textarea
-              placeholder="Course Description"
-              className="border p-2 rounded w-full"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-
-            {/* Policy Inputs */}
-            <div className="grid grid-cols-2 gap-2">
-              {Object.keys(form.policy).map((key) => (
-                <div key={key} className="flex flex-col">
-                  <label className="text-sm font-medium">{key.toUpperCase()} %</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={form.policy[key]}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        policy: { ...form.policy, [key]: Number(e.target.value) },
-                      })
-                    }
-                    className="border p-2 rounded"
-                    required
-                  />
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Professor Dashboard</h1>
+          <button
+            onClick={() => navigate("/professor/create-course")}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-semibold flex items-center gap-2 transition-colors"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              Create
-            </button>
-          </form>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Create New Course
+          </button>
         </div>
 
         {/* Display Professor's Courses */}
