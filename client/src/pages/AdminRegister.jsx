@@ -16,6 +16,8 @@ export default function AdminRegister() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdUserInfo, setCreatedUserInfo] = useState(null);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -31,11 +33,19 @@ export default function AdminRegister() {
       const res = await api.post("/auth/register", formData, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setMessage(res.data.message);
-      setFormData({ name: "", email: "", password: "", role: "student" });
       
-      // Auto-hide success message after 3 seconds
-      setTimeout(() => setMessage(""), 3000);
+      // Store created user info for the modal
+      setCreatedUserInfo({
+        name: formData.name,
+        email: formData.email,
+        role: formData.role
+      });
+      
+      // Show success modal
+      setShowSuccessModal(true);
+      
+      // Reset form
+      setFormData({ name: "", email: "", password: "", role: "student" });
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed");
     } finally {
@@ -74,18 +84,7 @@ export default function AdminRegister() {
           {/* Form Card */}
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
             <div className="p-8">
-              {/* Messages */}
-              {message && (
-                <div className="mb-6 bg-green-50 border-l-4 border-green-500 p-4 rounded animate-pulse">
-                  <div className="flex items-center">
-                    <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <p className="text-green-700 font-medium">{message}</p>
-                  </div>
-                </div>
-              )}
-
+              {/* Error Message */}
               {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded">
                   <div className="flex items-center">
@@ -167,7 +166,7 @@ export default function AdminRegister() {
                     <input
                       type="email"
                       name="email"
-                      placeholder="student@iitgn.ac.in"
+                      placeholder="username@iitgn.ac.in"
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
                       value={formData.email}
                       onChange={handleChange}
@@ -226,6 +225,60 @@ export default function AdminRegister() {
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in">
+            {/* Success Icon Header */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 text-center">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full mb-4">
+                <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-white">User Created Successfully!</h2>
+            </div>
+
+            {/* User Details */}
+            <div className="p-6">
+              <div className="space-y-4 mb-6">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm text-gray-600 mb-1">Name</p>
+                  <p className="font-semibold text-gray-900">{createdUserInfo?.name}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm text-gray-600 mb-1">Email</p>
+                  <p className="font-semibold text-gray-900">{createdUserInfo?.email}</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm text-gray-600 mb-1">Role</p>
+                  <p className="font-semibold text-gray-900 capitalize">{createdUserInfo?.role}</p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transform transition duration-200 hover:scale-[1.02]"
+                >
+                  Register Another User
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    navigate('/admin');
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 px-4 rounded-lg font-semibold hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition duration-200"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
