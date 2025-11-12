@@ -116,6 +116,7 @@ export const updateCourseGrades = async (req, res) => {
           code: course.code,
           policy: course.policy,
           quizCount: course.quizCount || 0,
+          maxMarks: course.maxMarks || {},
         },
         studentGrades: grade ? [{
           _id: grade._id,

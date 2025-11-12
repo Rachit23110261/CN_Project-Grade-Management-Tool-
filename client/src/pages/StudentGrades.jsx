@@ -11,6 +11,7 @@ export default function StudentGrades() {
   const [courseName, setCourseName] = useState("");
   const [coursePolicy, setCoursePolicy] = useState({});
   const [quizCount, setQuizCount] = useState(0);
+  const [maxMarks, setMaxMarks] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function StudentGrades() {
         setCourseName(course?.name || "Course");
         setCoursePolicy(course?.policy || {});
         setQuizCount(course?.quizCount || 0);
+        setMaxMarks(course?.maxMarks || {});
 
         if (Array.isArray(studentGrades) && studentGrades.length > 0) {
           setGrades(studentGrades[0].marks);
@@ -81,7 +83,11 @@ export default function StudentGrades() {
       policyWeight = coursePolicy[key] || 0;
     }
     
-    return (score / 100) * policyWeight;
+    // Get max marks for this assessment (default to 100 if not set)
+    const max = maxMarks[key] || 100;
+    
+    // Calculate weighted contribution: (score / maxMarks) * policyWeight
+    return (score / max) * policyWeight;
   };
 
   // Calculate total weighted score
@@ -214,22 +220,6 @@ export default function StudentGrades() {
                     </div>
                   </div>
                 </div>
-
-                <div className="bg-white rounded-xl shadow-lg p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm font-medium">Status</p>
-                      <p className="text-lg font-bold text-green-600 mt-1">
-                        {totalWeightedScore >= 60 ? 'Passing' : visibleAssessments.length === 0 ? 'Pending' : 'Needs Improvement'}
-                      </p>
-                    </div>
-                    <div className={`rounded-full p-3 ${totalWeightedScore >= 60 ? 'bg-green-100' : visibleAssessments.length === 0 ? 'bg-gray-100' : 'bg-red-100'}`}>
-                      <svg className={`w-8 h-8 ${totalWeightedScore >= 60 ? 'text-green-600' : visibleAssessments.length === 0 ? 'text-gray-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={totalWeightedScore >= 60 ? "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" : "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"} />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* Detailed Grades */}
@@ -254,6 +244,7 @@ export default function StudentGrades() {
                         }
                         
                         const weightedContribution = calculateWeightedScore(score, key);
+                        const max = maxMarks[key] || 100;
                         
                         // Format display name
                         const displayName = key.startsWith('quiz') 
@@ -286,7 +277,7 @@ export default function StudentGrades() {
                               
                               <div className="flex items-center space-x-4">
                                 <span className="text-3xl font-bold text-gray-900">{displayValue}</span>
-                                {score > 0 && <span className="text-gray-500 text-sm">/100</span>}
+                                {score > 0 && <span className="text-gray-500 text-sm">/{max}</span>}
                               </div>
                             </div>
                             
@@ -295,7 +286,7 @@ export default function StudentGrades() {
                               <div className="w-full bg-gray-200 rounded-full h-2.5">
                                 <div 
                                   className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500"
-                                  style={{ width: `${score}%` }}
+                                  style={{ width: `${Math.min((score / max) * 100, 100)}%` }}
                                 ></div>
                               </div>
                             )}

@@ -12,6 +12,8 @@ export default function GradeManagement() {
   const [quizCount, setQuizCount] = useState(0);
   const [uploadResult, setUploadResult] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showMaxMarksModal, setShowMaxMarksModal] = useState(false);
+  const [maxMarks, setMaxMarks] = useState({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -19,6 +21,7 @@ export default function GradeManagement() {
         const res = await api.get(`/grades/${courseId}`);
         setCourse(res.data.course);
         setQuizCount(res.data.course.quizCount || 0);
+        setMaxMarks(res.data.course.maxMarks || {});
 
         // Initialize grades - create deep copy to avoid shared references
         const g = {};
@@ -201,6 +204,40 @@ export default function GradeManagement() {
     window.URL.revokeObjectURL(url);
   };
 
+  const handleMaxMarksChange = (key, value) => {
+    setMaxMarks(prev => ({
+      ...prev,
+      [key]: Number(value) || 100
+    }));
+  };
+
+  const handleSaveMaxMarks = async () => {
+    try {
+      // Ensure all values are valid numbers
+      const validatedMaxMarks = {};
+      Object.keys(maxMarks).forEach(key => {
+        const value = Number(maxMarks[key]);
+        if (!isNaN(value) && value > 0) {
+          validatedMaxMarks[key] = value;
+        }
+      });
+
+      console.log("Sending maxMarks:", validatedMaxMarks);
+
+      const response = await api.put(`/courses/${courseId}/max-marks`, { maxMarks: validatedMaxMarks });
+      
+      // Update local state with the response
+      setCourse(response.data.course);
+      setMaxMarks(response.data.course.maxMarks || validatedMaxMarks);
+      setShowMaxMarksModal(false);
+      alert("Max marks updated successfully!");
+    } catch (err) {
+      console.error("Error updating max marks:", err);
+      console.error("Error details:", err.response?.data);
+      alert(err.response?.data?.message || "Error updating max marks");
+    }
+  };
+
   if (loading) return <p>Loading...</p>;
 
   // Get active components and expand quizzes if needed
@@ -228,7 +265,19 @@ export default function GradeManagement() {
     <>
       <Navbar />
       <div className="p-8">
-        <h1 className="text-2xl font-bold mb-4">{course.name} - Grade Management</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">{course.name} - Grade Management</h1>
+          <button
+            onClick={() => setShowMaxMarksModal(true)}
+            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Set Max Marks
+          </button>
+        </div>
         
         {/* Quiz Management Section */}
         {course.policy.quizzes > 0 && (
@@ -283,11 +332,13 @@ export default function GradeManagement() {
                       const isQuiz = key.startsWith('quiz');
                       const displayName = isQuiz ? key.toUpperCase().replace('QUIZ', 'Quiz ') : key.toUpperCase();
                       const weight = isQuiz ? quizWeightPerQuiz : course.policy[key];
+                      const max = maxMarks[key] || 100;
                       
                       return (
                         <th key={key} className="border p-2">
                           {displayName}
                           <div className="text-xs font-normal text-gray-500">({weight}%)</div>
+                          <div className="text-xs font-normal text-blue-600">Max: {max}</div>
                         </th>
                       );
                     })}
@@ -303,20 +354,23 @@ export default function GradeManagement() {
                           <div className="text-xs text-gray-500">{student?.email}</div>
                           <div className="text-xs text-gray-400 font-mono">ID: {studentId.slice(-6)}</div>
                         </td>
-                        {activeComponents.map(key => (
-                          <td key={key} className="border p-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={grades[studentId]?.[key] || 0}
-                              onChange={(e) => handleChange(studentId, key, e.target.value)}
-                              className="w-full border rounded p-1"
-                              data-student-id={studentId}
-                              data-field={key}
-                            />
-                          </td>
-                        ))}
+                        {activeComponents.map(key => {
+                          const max = maxMarks[key] || 100;
+                          return (
+                            <td key={key} className="border p-2">
+                              <input
+                                type="number"
+                                min={0}
+                                max={max}
+                                value={grades[studentId]?.[key] || 0}
+                                onChange={(e) => handleChange(studentId, key, e.target.value)}
+                                className="w-full border rounded p-1"
+                                data-student-id={studentId}
+                                data-field={key}
+                              />
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
                   })}
@@ -401,6 +455,76 @@ export default function GradeManagement() {
           </>
         )}
       </div>
+
+      {/* Max Marks Modal */}
+      {showMaxMarksModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowMaxMarksModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">Set Maximum Marks</h3>
+                <p className="text-purple-100 text-sm">Configure max marks for each assessment</p>
+              </div>
+              <button
+                onClick={() => setShowMaxMarksModal(false)}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                {activeComponents.map(key => {
+                  const isQuiz = key.startsWith('quiz');
+                  const displayName = isQuiz ? key.toUpperCase().replace('QUIZ', 'Quiz ') : key.toUpperCase();
+                  const weight = isQuiz ? quizWeightPerQuiz : course.policy[key];
+                  
+                  return (
+                    <div key={key} className="bg-gray-50 rounded-lg p-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {displayName}
+                        <span className="text-gray-500 text-xs ml-2">({weight}% weightage)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={maxMarks[key] || 100}
+                        onChange={(e) => handleMaxMarksChange(key, e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="100"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowMaxMarksModal(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveMaxMarks}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                >
+                  Save Max Marks
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

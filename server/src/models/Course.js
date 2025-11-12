@@ -15,6 +15,24 @@ const courseSchema = new mongoose.Schema({
     attendance: { type: Number, default: 0 },
     participation: { type: Number, default: 0 },
   },
+  maxMarks: {
+    midsem: { type: Number, default: 100 },
+    endsem: { type: Number, default: 100 },
+    quiz1: { type: Number, default: 100 },
+    quiz2: { type: Number, default: 100 },
+    quiz3: { type: Number, default: 100 },
+    quiz4: { type: Number, default: 100 },
+    quiz5: { type: Number, default: 100 },
+    quiz6: { type: Number, default: 100 },
+    quiz7: { type: Number, default: 100 },
+    quiz8: { type: Number, default: 100 },
+    quiz9: { type: Number, default: 100 },
+    quiz10: { type: Number, default: 100 },
+    project: { type: Number, default: 100 },
+    assignment: { type: Number, default: 100 },
+    attendance: { type: Number, default: 100 },
+    participation: { type: Number, default: 100 },
+  },
   quizCount: { type: Number, default: 0, min: 0, max: 10 }, // Number of active quizzes
 }, { timestamps: true });
 

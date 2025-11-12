@@ -147,4 +147,50 @@ export const updateQuizCount = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Update max marks for assessments (professor only)
+export const updateMaxMarks = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if the logged-in professor owns this course
+    if (course.professor.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Not authorized to modify this course" });
+    }
+    
+    const { maxMarks } = req.body;
+    
+    // Validate that max marks are positive numbers
+    for (const [key, value] of Object.entries(maxMarks)) {
+      if (value < 0) {
+        return res.status(400).json({ message: `Max marks for ${key} must be positive` });
+      }
+    }
+    
+    // Initialize maxMarks if it doesn't exist
+    if (!course.maxMarks) {
+      course.maxMarks = {};
+    }
+    
+    // Update max marks - spread existing and new values
+    course.maxMarks = { 
+      ...course.maxMarks.toObject ? course.maxMarks.toObject() : course.maxMarks,
+      ...maxMarks 
+    };
+    
+    // Mark the field as modified for Mongoose
+    course.markModified('maxMarks');
+    
+    await course.save();
+    
+    res.json({ message: "Max marks updated successfully", course });
+  } catch (error) {
+    console.error("Error updating max marks:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
   
