@@ -32,6 +32,11 @@ export const getCourseGrades = async (req, res) => {
         quiz8: g.marks.quiz8 || 0,
         quiz9: g.marks.quiz9 || 0,
         quiz10: g.marks.quiz10 || 0,
+        assignment1: g.marks.assignment1 || 0,
+        assignment2: g.marks.assignment2 || 0,
+        assignment3: g.marks.assignment3 || 0,
+        assignment4: g.marks.assignment4 || 0,
+        assignment5: g.marks.assignment5 || 0,
         project: g.marks.project || 0,
         assignment: g.marks.assignment || 0,
         attendance: g.marks.attendance || 0,
@@ -50,6 +55,11 @@ export const getCourseGrades = async (req, res) => {
         quiz8: 0,
         quiz9: 0,
         quiz10: 0,
+        assignment1: 0,
+        assignment2: 0,
+        assignment3: 0,
+        assignment4: 0,
+        assignment5: 0,
         project: 0,
         assignment: 0,
         attendance: 0,
@@ -276,6 +286,146 @@ export const getGradeById = async (req, res) => {
     res.json(grade);
   } catch (err) {
     console.error("Error fetching grade by ID:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Get course grade statistics
+export const getCourseStatistics = async (req, res) => {
+  const { courseId } = req.params;
+
+  try {
+    const course = await Course.findById(courseId).populate("students", "name email");
+    if (!course) return res.status(404).json({ message: "Course not found" });
+
+    // Check if professor owns this course
+    if (course.professor.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Not authorized to view statistics for this course" });
+    }
+
+    const grades = await Grade.find({ course: courseId }).populate("student", "name email");
+
+    if (grades.length === 0) {
+      return res.status(404).json({ message: "No grades found for this course" });
+    }
+
+    const policy = course.policy;
+    const quizCount = course.quizCount || 0;
+    const assignmentCount = course.assignmentCount || 0;
+    const maxMarks = course.maxMarks || {};
+
+    // Helper function to calculate statistics
+    const calculateStats = (values) => {
+      if (values.length === 0) return { mean: 0, median: 0, stdDev: 0, min: 0, max: 0 };
+      
+      const sorted = values.slice().sort((a, b) => a - b);
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const median = values.length % 2 === 0
+        ? (sorted[values.length / 2 - 1] + sorted[values.length / 2]) / 2
+        : sorted[Math.floor(values.length / 2)];
+      
+      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const stdDev = Math.sqrt(variance);
+      
+      return {
+        mean,
+        median,
+        stdDev,
+        min: sorted[0],
+        max: sorted[sorted.length - 1]
+      };
+    };
+
+    // Calculate weighted scores for each student
+    const studentGrades = grades.map(grade => {
+      let weightedScore = 0;
+      const marks = grade.marks;
+
+      // Calculate weighted contribution for each component
+      Object.keys(policy).forEach(key => {
+        if (policy[key] > 0) {
+          if (key === 'quizzes' && quizCount > 0) {
+            // Handle individual quizzes
+            for (let i = 1; i <= quizCount; i++) {
+              const quizKey = `quiz${i}`;
+              const score = marks[quizKey] || 0;
+              const max = maxMarks[quizKey] || 100;
+              const weight = policy.quizzes / quizCount;
+              weightedScore += (score / max) * weight;
+            }
+          } else if (key === 'assignment' && assignmentCount > 0) {
+            // Handle individual assignments
+            for (let i = 1; i <= assignmentCount; i++) {
+              const assignmentKey = `assignment${i}`;
+              const score = marks[assignmentKey] || 0;
+              const max = maxMarks[assignmentKey] || 100;
+              const weight = policy.assignment / assignmentCount;
+              weightedScore += (score / max) * weight;
+            }
+          } else if (key !== 'quizzes' && key !== 'assignment') {
+            // Handle other components
+            const score = marks[key] || 0;
+            const max = maxMarks[key] || 100;
+            weightedScore += (score / max) * policy[key];
+          }
+        }
+      });
+
+      return {
+        name: grade.student.name,
+        email: grade.student.email,
+        weightedScore,
+        marks: marks
+      };
+    });
+
+    // Calculate overall statistics
+    const overallScores = studentGrades.map(s => s.weightedScore);
+    const overallStats = calculateStats(overallScores);
+
+    // Calculate assessment-wise statistics
+    const assessmentStats = {};
+    
+    // Helper to get active assessments
+    const getActiveAssessments = () => {
+      const assessments = [];
+      Object.keys(policy).forEach(key => {
+        if (policy[key] > 0) {
+          if (key === 'quizzes' && quizCount > 0) {
+            for (let i = 1; i <= quizCount; i++) {
+              assessments.push(`quiz${i}`);
+            }
+          } else if (key === 'assignment' && assignmentCount > 0) {
+            for (let i = 1; i <= assignmentCount; i++) {
+              assessments.push(`assignment${i}`);
+            }
+          } else if (key !== 'quizzes' && key !== 'assignment') {
+            assessments.push(key);
+          }
+        }
+      });
+      return assessments;
+    };
+
+    const activeAssessments = getActiveAssessments();
+    
+    activeAssessments.forEach(assessment => {
+      const scores = grades.map(grade => grade.marks[assessment] || 0).filter(s => s > 0);
+      if (scores.length > 0) {
+        assessmentStats[assessment] = calculateStats(scores);
+      }
+    });
+
+    res.json({
+      course,
+      statistics: {
+        overallStats,
+        assessmentStats,
+        studentGrades
+      }
+    });
+  } catch (err) {
+    console.error("Error calculating statistics:", err);
     res.status(500).json({ message: err.message });
   }
 };

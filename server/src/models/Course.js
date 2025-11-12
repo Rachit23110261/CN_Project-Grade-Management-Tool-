@@ -28,12 +28,18 @@ const courseSchema = new mongoose.Schema({
     quiz8: { type: Number, default: 100 },
     quiz9: { type: Number, default: 100 },
     quiz10: { type: Number, default: 100 },
+    assignment1: { type: Number, default: 100 },
+    assignment2: { type: Number, default: 100 },
+    assignment3: { type: Number, default: 100 },
+    assignment4: { type: Number, default: 100 },
+    assignment5: { type: Number, default: 100 },
     project: { type: Number, default: 100 },
     assignment: { type: Number, default: 100 },
     attendance: { type: Number, default: 100 },
     participation: { type: Number, default: 100 },
   },
   quizCount: { type: Number, default: 0, min: 0, max: 10 }, // Number of active quizzes
+  assignmentCount: { type: Number, default: 0, min: 0, max: 5 }, // Number of active assignments
 }, { timestamps: true });
 
 

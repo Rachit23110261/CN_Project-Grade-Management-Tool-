@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import StudentsList from "./pages/StudentsList";
 import ProfessorsList from "./pages/ProffessorList";
 import GradeManagement from "./pages/GradeManagement";
+import GradeStatistics from "./pages/GradeStatistics";
 import StudentGrades from "./pages/StudentGrades";
 import ChallengeGrade from "./pages/ChallengeGrade";
 import StudentChallenges from "./pages/StudentChallenges";
@@ -103,6 +104,24 @@ export default function App() {
           />
 
           {/* ---------- Professor - Grade Management ---------- */}
+<Route
+  path="/professor/courses/:courseId/grades"
+  element={
+    <ProtectedRoute allowedRoles={["professor"]}>
+      <GradeManagement />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/professor/courses/:courseId/statistics"
+  element={
+    <ProtectedRoute allowedRoles={["professor"]}>
+      <GradeStatistics />
+    </ProtectedRoute>
+  }
+/>
+
 <Route
   path="/grades/:courseId"
   element={

@@ -148,6 +148,35 @@ export const updateQuizCount = async (req, res) => {
   }
 };
 
+// Update assignment count for a course (professor only)
+export const updateAssignmentCount = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if the logged-in professor owns this course
+    if (course.professor.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Not authorized to modify this course" });
+    }
+    
+    const { assignmentCount } = req.body;
+    
+    if (assignmentCount < 0 || assignmentCount > 5) {
+      return res.status(400).json({ message: "Assignment count must be between 0 and 5" });
+    }
+    
+    course.assignmentCount = assignmentCount;
+    await course.save();
+    
+    res.json({ message: "Assignment count updated successfully", course });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Update max marks for assessments (professor only)
 export const updateMaxMarks = async (req, res) => {
   try {

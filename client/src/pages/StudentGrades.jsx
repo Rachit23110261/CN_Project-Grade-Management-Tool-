@@ -11,6 +11,7 @@ export default function StudentGrades() {
   const [courseName, setCourseName] = useState("");
   const [coursePolicy, setCoursePolicy] = useState({});
   const [quizCount, setQuizCount] = useState(0);
+  const [assignmentCount, setAssignmentCount] = useState(0);
   const [maxMarks, setMaxMarks] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -24,6 +25,7 @@ export default function StudentGrades() {
         setCourseName(course?.name || "Course");
         setCoursePolicy(course?.policy || {});
         setQuizCount(course?.quizCount || 0);
+        setAssignmentCount(course?.assignmentCount || 0);
         setMaxMarks(course?.maxMarks || {});
 
         if (Array.isArray(studentGrades) && studentGrades.length > 0) {
@@ -60,6 +62,12 @@ export default function StudentGrades() {
         if (quizNum <= quizCount && score > 0) {
           visible.push([key, value]);
         }
+      } else if (key.startsWith('assignment')) {
+        // Handle individual assignment grades
+        const assignmentNum = parseInt(key.replace('assignment', ''));
+        if (assignmentNum <= assignmentCount && score > 0) {
+          visible.push([key, value]);
+        }
       } else {
         // Handle other assessments
         const policyWeight = coursePolicy[key] || 0;
@@ -79,6 +87,9 @@ export default function StudentGrades() {
     if (key.startsWith('quiz')) {
       // For individual quizzes, divide total quiz weight by quiz count
       policyWeight = quizCount > 0 ? (coursePolicy.quizzes / quizCount) : 0;
+    } else if (key.startsWith('assignment')) {
+      // For individual assignments, divide total assignment weight by assignment count
+      policyWeight = assignmentCount > 0 ? (coursePolicy.assignment / assignmentCount) : 0;
     } else {
       policyWeight = coursePolicy[key] || 0;
     }
@@ -239,6 +250,8 @@ export default function StudentGrades() {
                         let policyWeight;
                         if (key.startsWith('quiz')) {
                           policyWeight = quizCount > 0 ? (coursePolicy.quizzes / quizCount).toFixed(2) : 0;
+                        } else if (key.startsWith('assignment')) {
+                          policyWeight = assignmentCount > 0 ? (coursePolicy.assignment / assignmentCount).toFixed(2) : 0;
                         } else {
                           policyWeight = coursePolicy[key] || 0;
                         }
@@ -247,9 +260,14 @@ export default function StudentGrades() {
                         const max = maxMarks[key] || 100;
                         
                         // Format display name
-                        const displayName = key.startsWith('quiz') 
-                          ? key.replace('quiz', 'Quiz ') 
-                          : key.replace(/_/g, ' ');
+                        let displayName;
+                        if (key.startsWith('quiz')) {
+                          displayName = key.replace('quiz', 'Quiz ');
+                        } else if (key.startsWith('assignment')) {
+                          displayName = key.replace('assignment', 'Assignment ');
+                        } else {
+                          displayName = key.replace(/_/g, ' ');
+                        }
                         
                         return (
                           <div key={index} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
