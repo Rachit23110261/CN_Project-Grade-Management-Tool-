@@ -33,7 +33,8 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json()); // for parsing application/json
+app.use(express.json({ limit: '100mb' })); // for parsing application/json with larger payload (increased for base64 attachments)
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // Base route
 app.get("/", (req, res) => {

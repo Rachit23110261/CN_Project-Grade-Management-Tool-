@@ -13,6 +13,8 @@ export default function ChallengeGrade() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [challengeCount, setChallengeCount] = useState(null);
+  const [maxChallenges, setMaxChallenges] = useState(5);
 
   useEffect(() => {
     fetchGradeDetails();
@@ -25,6 +27,12 @@ export default function ChallengeGrade() {
 
       const courseRes = await api.get(`/courses/${gradeRes.data.course._id || gradeRes.data.course}`);
       setCourse(courseRes.data);
+
+      // Fetch challenge count for this course
+      const courseId = gradeRes.data.course._id || gradeRes.data.course;
+      const countRes = await api.get(`/challenges/count/${courseId}`);
+      setChallengeCount(countRes.data.count);
+      setMaxChallenges(countRes.data.maxChallenges);
     } catch (err) {
       console.error("Error fetching grade details:", err);
       setError("Failed to load grade details");
@@ -40,9 +48,9 @@ export default function ChallengeGrade() {
         setError("Only PDF and image files are allowed");
         return;
       }
-      // Validate file size (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        setError("File size must be less than 5MB");
+      // Validate file size (25MB max)
+      if (file.size > 25 * 1024 * 1024) {
+        setError("File size must be less than 25MB");
         return;
       }
       setAttachment(file);
@@ -74,6 +82,11 @@ export default function ChallengeGrade() {
         description,
         attachmentUrl: attachmentData,
         attachmentName: attachment?.name || null,
+      }).then(response => {
+        // Get the updated challenge count from response
+        if (response.data.challengeCount) {
+          setChallengeCount(response.data.challengeCount);
+        }
       });
 
       setSuccess(true);
@@ -109,10 +122,60 @@ export default function ChallengeGrade() {
                 </svg>
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Challenge Submitted!</h2>
-              <p className="text-gray-600">Your professor will review your challenge and respond soon.</p>
+              <p className="text-gray-600 mb-2">Your professor will review your challenge and respond soon.</p>
+              {challengeCount && (
+                <p className="text-sm text-gray-500 mt-4">
+                  You have used <span className="font-semibold">{challengeCount}/5</span> challenges for this course.
+                </p>
+              )}
             </div>
           ) : (
             <>
+              {/* Challenge Count Info Banner */}
+              {challengeCount !== null && (
+                <div className={`mb-4 rounded-lg p-4 ${
+                  challengeCount >= maxChallenges 
+                    ? 'bg-red-50 border border-red-200' 
+                    : challengeCount >= maxChallenges - 1 
+                      ? 'bg-yellow-50 border border-yellow-200' 
+                      : 'bg-blue-50 border border-blue-200'
+                }`}>
+                  <div className="flex items-start">
+                    <svg className={`w-5 h-5 mt-0.5 mr-3 ${
+                      challengeCount >= maxChallenges 
+                        ? 'text-red-600' 
+                        : challengeCount >= maxChallenges - 1 
+                          ? 'text-yellow-600' 
+                          : 'text-blue-600'
+                    }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className={`font-medium ${
+                        challengeCount >= maxChallenges 
+                          ? 'text-red-800' 
+                          : challengeCount >= maxChallenges - 1 
+                            ? 'text-yellow-800' 
+                            : 'text-blue-800'
+                      }`}>
+                        {challengeCount >= maxChallenges 
+                          ? 'Challenge limit reached' 
+                          : `${maxChallenges - challengeCount} challenge${maxChallenges - challengeCount === 1 ? '' : 's'} remaining`}
+                      </p>
+                      <p className={`text-sm mt-1 ${
+                        challengeCount >= maxChallenges 
+                          ? 'text-red-700' 
+                          : challengeCount >= maxChallenges - 1 
+                            ? 'text-yellow-700' 
+                            : 'text-blue-700'
+                      }`}>
+                        You have used {challengeCount} out of {maxChallenges} challenges for this course.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Header */}
               <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                 <h1 className="text-2xl font-bold text-gray-900 mb-4">Challenge Grade</h1>
@@ -197,7 +260,7 @@ export default function ChallengeGrade() {
                     </label>
                     <textarea
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-                      rows="6"
+                      rows="12"
                       placeholder="Please explain why you believe your grade should be reconsidered..."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
@@ -228,7 +291,7 @@ export default function ChallengeGrade() {
                         <span className="text-sm text-gray-600">
                           {attachment ? attachment.name : "Click to upload or drag and drop"}
                         </span>
-                        <span className="text-xs text-gray-500 mt-1">PDF, JPG, JPEG, PNG (max 5MB)</span>
+                        <span className="text-xs text-gray-500 mt-1">PDF, JPG, JPEG, PNG (max 25MB)</span>
                       </label>
                     </div>
                   </div>

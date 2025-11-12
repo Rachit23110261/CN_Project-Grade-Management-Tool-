@@ -188,7 +188,7 @@ export default function ProfessorChallenges() {
                   setSelectedChallenge(null);
                   setResponse("");
                 }}
-                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition"
+                className="text-white hover:text-gray-200 p-2 transition"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -285,7 +285,7 @@ export default function ProfessorChallenges() {
                       <a
                         href={selectedChallenge.attachmentUrl}
                         download={selectedChallenge.attachmentName}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2"
+                        className="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition flex items-center space-x-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -305,7 +305,7 @@ export default function ProfessorChallenges() {
                 <form onSubmit={handleRespond}>
                   <textarea
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-                    rows="6"
+                    rows="12"
                     placeholder="Provide your response to the student's challenge..."
                     value={response}
                     onChange={(e) => setResponse(e.target.value)}

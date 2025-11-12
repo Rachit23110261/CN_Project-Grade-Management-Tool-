@@ -18,15 +18,16 @@ export const createChallenge = async (req, res, next) => {
       return res.status(404).json({ message: "Grade not found or does not belong to you" });
     }
 
-    // Check if challenge already exists for this grade
-    const existingChallenge = await Challenge.findOne({
-      grade: gradeId,
+    // Check how many challenges already exist for this course by this student
+    const existingChallenges = await Challenge.find({
+      course: courseId,
       student: studentId,
     });
 
-    if (existingChallenge) {
+    // Limit to 5 challenges per course
+    if (existingChallenges.length >= 5) {
       return res.status(400).json({ 
-        message: "You have already submitted a challenge for this grade" 
+        message: "You have reached the maximum limit of 5 challenges for this course" 
       });
     }
 
@@ -54,8 +55,10 @@ export const createChallenge = async (req, res, next) => {
     }
 
     res.status(201).json({
-      message: "Challenge submitted successfully",
+      message: `Challenge submitted successfully (${existingChallenges.length + 1}/5 challenges used)`,
       challenge,
+      challengeCount: existingChallenges.length + 1,
+      maxChallenges: 5,
     });
   } catch (err) {
     next(err);
@@ -198,6 +201,30 @@ export const getChallengeById = async (req, res, next) => {
     }
 
     res.json(challenge);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Get challenge count for a student in a course
+// @route GET /api/challenges/count/:courseId
+// @access Private (Student only)
+export const getChallengeCount = async (req, res, next) => {
+  try {
+    const { courseId } = req.params;
+    const studentId = req.user.id;
+
+    const count = await Challenge.countDocuments({
+      course: courseId,
+      student: studentId,
+    });
+
+    res.json({
+      count,
+      maxChallenges: 5,
+      remaining: 5 - count,
+      canSubmit: count < 5,
+    });
   } catch (err) {
     next(err);
   }

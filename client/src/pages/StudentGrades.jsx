@@ -15,6 +15,8 @@ export default function StudentGrades() {
   const [maxMarks, setMaxMarks] = useState({});
   const [letterGrade, setLetterGrade] = useState(null);
   const [letterGradesPublished, setLetterGradesPublished] = useState(false);
+  const [challengeCount, setChallengeCount] = useState(0);
+  const [maxChallenges, setMaxChallenges] = useState(5);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +49,22 @@ export default function StudentGrades() {
     };
 
     fetchGrades();
+  }, [courseId]);
+
+  useEffect(() => {
+    const fetchChallengeCount = async () => {
+      try {
+        const res = await api.get(`/challenges/count/${courseId}`);
+        setChallengeCount(res.data.count);
+        setMaxChallenges(res.data.maxChallenges);
+      } catch (err) {
+        console.error("Error fetching challenge count:", err);
+      }
+    };
+
+    if (courseId) {
+      fetchChallengeCount();
+    }
   }, [courseId]);
 
   // Filter assessments to only show those with policy > 0 AND score > 0
@@ -184,15 +202,28 @@ export default function StudentGrades() {
                 </div>
                 <div className="flex items-center space-x-4">
                   {grades && gradeId && (
-                    <button
-                      onClick={() => navigate(`/student/challenge/${gradeId}`)}
-                      className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg transition-colors font-medium"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      <span>Challenge Grade</span>
-                    </button>
+                    <div className="flex flex-col items-end space-y-2">
+                      <button
+                        onClick={() => navigate(`/student/challenge/${gradeId}`)}
+                        disabled={challengeCount >= maxChallenges}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors font-medium ${
+                          challengeCount >= maxChallenges
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                        }`}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>Challenge Grade</span>
+                      </button>
+                      <span className={`text-xs font-medium ${
+                        challengeCount >= maxChallenges ? 'text-red-600' : 'text-gray-600'
+                      }`}>
+                        {challengeCount}/{maxChallenges} challenges used
+                        {challengeCount >= maxChallenges && ' (limit reached)'}
+                      </span>
+                    </div>
                   )}
                   <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-4 text-white text-center">
                     <div className="text-3xl font-bold">{totalWeightedScore}%</div>
