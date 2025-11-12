@@ -1,5 +1,11 @@
 import nodemailer from "nodemailer";
 
+// Get frontend URL - prioritize environment variable, fallback to network address
+// Note: Update FRONTEND_URL in .env with your network IP (e.g., http://10.1.2.3:5173)
+const getFrontendUrl = () => {
+  return process.env.FRONTEND_URL || 'http://localhost:5173';
+};
+
 // Configure email transporter
 const createTransporter = () => {
   return nodemailer.createTransport({
@@ -46,6 +52,17 @@ export const sendPasswordResetEmail = async (to, tempPassword) => {
             </ul>
           </div>
           
+          <div style="text-align: center; margin: 30px 0;">
+            <p>Login with your temporary password:</p>
+            <a href="${getFrontendUrl()}/login" 
+               style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">
+              Login Now
+            </a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 10px;">
+              Or copy this link: ${getFrontendUrl()}/login
+            </p>
+          </div>
+          
           <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
             If you didn't request this temporary password, please ignore this email or contact your administrator.
           </p>
@@ -81,6 +98,17 @@ export const sendChallengeNotification = async (professorEmail, studentName, cou
           <p>Hello,</p>
           <p><strong>${studentName}</strong> has submitted a grade challenge for <strong>${courseName}</strong>.</p>
           <p>Please log in to the Grade Management System to review and respond to this challenge.</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${getFrontendUrl()}/login" 
+               style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Review Challenge
+            </a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 10px;">
+              Or visit: ${getFrontendUrl()}/login
+            </p>
+          </div>
+          
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
             This is an automated notification from Grade Management System.
@@ -111,6 +139,17 @@ export const sendChallengeResponseNotification = async (studentEmail, courseName
           <p>Hello,</p>
           <p>Your professor has responded to your grade challenge for <strong>${courseName}</strong>.</p>
           <p>Please log in to the Grade Management System to view the response.</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${getFrontendUrl()}/login" 
+               style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              View Response
+            </a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 10px;">
+              Or visit: ${getFrontendUrl()}/login
+            </p>
+          </div>
+          
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">
             This is an automated notification from Grade Management System.
@@ -158,10 +197,13 @@ export const sendWelcomeEmail = async (to, username, password, role) => {
           
           <div style="text-align: center; margin: 30px 0;">
             <p>Login to the system and change your password:</p>
-            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login" 
+            <a href="${getFrontendUrl()}/login" 
                style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">
               Login Now
             </a>
+            <p style="color: #9ca3af; font-size: 12px; margin-top: 10px;">
+              Or copy this link: ${getFrontendUrl()}/login
+            </p>
           </div>
           
           <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
