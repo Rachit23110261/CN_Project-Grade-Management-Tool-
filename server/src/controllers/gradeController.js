@@ -125,8 +125,124 @@ export const updateCourseGrades = async (req, res) => {
         marks: grade ? grade.marks : null,
       });
     } catch (err) {
-      console.error("Error fetching student grades:", err);
+      console.log("Error fetching student grades:", err);
       res.status(500).json({ message: err.message });
     }
   };
+
+// Upload grades from CSV
+export const uploadGradesFromCSV = async (req, res) => {
+  const { courseId } = req.params;
+  const { csvData } = req.body; // Array of objects from parsed CSV
+
+  try {
+    const course = await Course.findById(courseId).populate("students", "name email");
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    // Check if the logged-in professor owns this course
+    if (course.professor.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Not authorized to update grades for this course" });
+    }
+
+    let successCount = 0;
+    let skippedCount = 0;
+    const skippedEntries = [];
+
+    // Process each row from CSV
+    for (const row of csvData) {
+      const studentName = row.name || row.Name || row.student_name || row['Student Name'];
+      const studentEmail = row.email || row.Email || row.student_email || row['Student Email'];
+
+      if (!studentName || !studentEmail) {
+        skippedCount++;
+        skippedEntries.push({ row, reason: "Missing name or email" });
+        continue;
+      }
+
+      // Find student in course by name AND email
+      const student = course.students.find(
+        s => s.name.toLowerCase().trim() === studentName.toLowerCase().trim() && 
+             s.email.toLowerCase().trim() === studentEmail.toLowerCase().trim()
+      );
+
+      if (!student) {
+        skippedCount++;
+        skippedEntries.push({ name: studentName, email: studentEmail, reason: "Not enrolled in course" });
+        continue;
+      }
+
+      // Build marks object with defaults
+      const marks = {
+        midsem: 0,
+        endsem: 0,
+        quizzes: 0,
+        quiz1: 0,
+        quiz2: 0,
+        quiz3: 0,
+        quiz4: 0,
+        quiz5: 0,
+        quiz6: 0,
+        quiz7: 0,
+        quiz8: 0,
+        quiz9: 0,
+        quiz10: 0,
+        project: 0,
+        assignment: 0,
+        attendance: 0,
+        participation: 0
+      };
+
+      // Map CSV columns to marks (case-insensitive)
+      Object.keys(row).forEach(key => {
+        const lowerKey = key.toLowerCase().trim();
+        const value = parseFloat(row[key]) || 0;
+
+        // Map common column names
+        if (lowerKey === 'midsem' || lowerKey === 'mid sem' || lowerKey === 'midterm') {
+          marks.midsem = value;
+        } else if (lowerKey === 'endsem' || lowerKey === 'end sem' || lowerKey === 'endterm' || lowerKey === 'final') {
+          marks.endsem = value;
+        } else if (lowerKey === 'quizzes' || lowerKey === 'quiz') {
+          marks.quizzes = value;
+        } else if (lowerKey.match(/^quiz\s*(\d+)$/)) {
+          const quizNum = lowerKey.match(/^quiz\s*(\d+)$/)[1];
+          if (quizNum >= 1 && quizNum <= 10) {
+            marks[`quiz${quizNum}`] = value;
+          }
+        } else if (lowerKey === 'project') {
+          marks.project = value;
+        } else if (lowerKey === 'assignment' || lowerKey === 'assignments') {
+          marks.assignment = value;
+        } else if (lowerKey === 'attendance') {
+          marks.attendance = value;
+        } else if (lowerKey === 'participation') {
+          marks.participation = value;
+        }
+      });
+
+      // Update or create grade entry
+      await Grade.findOneAndUpdate(
+        { course: courseId, student: student._id },
+        { marks },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      successCount++;
+    }
+
+    res.json({
+      message: `CSV upload completed. ${successCount} students updated, ${skippedCount} entries skipped.`,
+      successCount,
+      skippedCount,
+      skippedEntries: skippedEntries.length > 0 ? skippedEntries : undefined
+    });
+
+  } catch (err) {
+    console.error("Error uploading grades from CSV:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
   
