@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
-import { sendPasswordResetEmail } from "../services/emailService.js";
+import { sendPasswordResetEmail, sendWelcomeEmail } from "../services/emailService.js";
 import crypto from "crypto";
 
 // Generate JWT Token
@@ -26,8 +26,18 @@ export const registerUser = async (req, res, next) => {
     if (userExists) return res.status(400).json({ message: "User already exists" });
 
     const user = await User.create({ name, email, password, role });
+    
+    // Send welcome email with credentials
+    try {
+      await sendWelcomeEmail(email, email, password, role);
+      console.log(`Welcome email sent to ${email}`);
+    } catch (emailError) {
+      console.error("Failed to send welcome email:", emailError);
+      // Don't fail registration if email fails
+    }
+    
     res.status(201).json({
-      message: "User registered successfully",
+      message: "User registered successfully and welcome email sent",
       user: { id: user._id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {

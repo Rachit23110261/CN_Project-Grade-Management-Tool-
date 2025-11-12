@@ -124,3 +124,62 @@ export const sendChallengeResponseNotification = async (studentEmail, courseName
     console.error("Error sending response notification:", error);
   }
 };
+
+// Send welcome email when admin registers a new user
+export const sendWelcomeEmail = async (to, username, password, role) => {
+  try {
+    const transporter = createTransporter();
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER || "kaushal.bule@iitgn.ac.in",
+      to,
+      subject: "Welcome to Grade Management System - Account Created",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #4f46e5;">🎉 Welcome to Grade Management System</h2>
+          <p>Hello,</p>
+          <p>Your account has been successfully created by the system administrator.</p>
+          
+          <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 10px 0;"><strong>Your Login Credentials:</strong></p>
+            <p style="margin: 5px 0;"><strong>Username:</strong> ${username}</p>
+            <p style="margin: 5px 0;"><strong>Password:</strong> <code style="background-color: #e5e7eb; padding: 4px 8px; border-radius: 3px; font-size: 16px; font-family: monospace;">${password}</code></p>
+            <p style="margin: 5px 0;"><strong>Role:</strong> ${role.charAt(0).toUpperCase() + role.slice(1)}</p>
+          </div>
+          
+          <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #991b1b;"><strong>🔒 IMPORTANT SECURITY NOTICE:</strong></p>
+            <ul style="margin: 10px 0; padding-left: 20px; color: #991b1b;">
+              <li><strong>Change your password IMMEDIATELY</strong> after your first login</li>
+              <li>Do not share your credentials with anyone</li>
+              <li>Keep this email secure and delete it after changing your password</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <p>Login to the system and change your password:</p>
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/login" 
+               style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">
+              Login Now
+            </a>
+          </div>
+          
+          <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+            If you have any questions or did not expect this account, please contact your administrator immediately.
+          </p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;" />
+          <p style="color: #9ca3af; font-size: 12px;">
+            This is an automated message from Grade Management System. Please do not reply to this email.
+          </p>
+        </div>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Welcome email sent:", info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error("Error sending welcome email:", error);
+    throw new Error("Failed to send welcome email");
+  }
+};
