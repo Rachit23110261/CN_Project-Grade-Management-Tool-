@@ -14,7 +14,7 @@ export default function Navbar() {
 
   const navClass = ({ isActive }) =>
     `px-3 py-2 rounded-md text-sm font-medium ${
-      isActive ? "bg-indigo-600 text-white" : "text-gray-700 hover:bg-gray-100"
+      isActive ? "bg-gray-200 text-gray-900" : "text-gray-700 hover:bg-gray-100"
     }`;
 
   return (
