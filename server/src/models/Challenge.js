@@ -55,11 +55,11 @@ challengeSchema.pre(/^find/, function (next) {
   })
     .populate({
       path: "course",
-      select: "name code professor",
+      select: "name code professor policy quizCount",
     })
     .populate({
       path: "grade",
-      select: "midterm endterm assignment total",
+      select: "marks",
     });
   next();
 });

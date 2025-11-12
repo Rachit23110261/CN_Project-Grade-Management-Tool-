@@ -20,12 +20,13 @@ export default function ChallengeGrade() {
 
   const fetchGradeDetails = async () => {
     try {
-      const gradeRes = await api.get(`/grades/${gradeId}`);
+      const gradeRes = await api.get(`/grades/grade/${gradeId}`);
       setGrade(gradeRes.data);
 
-      const courseRes = await api.get(`/courses/${gradeRes.data.course}`);
+      const courseRes = await api.get(`/courses/${gradeRes.data.course._id || gradeRes.data.course}`);
       setCourse(courseRes.data);
     } catch (err) {
+      console.error("Error fetching grade details:", err);
       setError("Failed to load grade details");
     }
   };
@@ -68,7 +69,7 @@ export default function ChallengeGrade() {
       }
 
       await api.post("/challenges", {
-        courseId: grade.course,
+        courseId: grade.course._id || grade.course,
         gradeId: gradeId,
         description,
         attachmentUrl: attachmentData,
@@ -125,21 +126,57 @@ export default function ChallengeGrade() {
                       <p className="text-sm text-gray-500">Course Code</p>
                       <p className="font-semibold text-gray-900">{course.code}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Midterm</p>
-                      <p className="font-semibold text-gray-900">{grade.midterm || "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Endterm</p>
-                      <p className="font-semibold text-gray-900">{grade.endterm || "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Assignment</p>
-                      <p className="font-semibold text-gray-900">{grade.assignment || "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Total</p>
-                      <p className="font-semibold text-indigo-600 text-lg">{grade.total || "-"}</p>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-500 mb-2">Current Grades</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {course.policy?.midsem > 0 && (
+                        <div className="bg-white p-2 rounded border">
+                          <p className="text-xs text-gray-500">Midsem ({course.policy.midsem}%)</p>
+                          <p className="font-semibold text-gray-900">{grade.marks?.midsem || 0}</p>
+                        </div>
+                      )}
+                      {course.policy?.endsem > 0 && (
+                        <div className="bg-white p-2 rounded border">
+                          <p className="text-xs text-gray-500">Endsem ({course.policy.endsem}%)</p>
+                          <p className="font-semibold text-gray-900">{grade.marks?.endsem || 0}</p>
+                        </div>
+                      )}
+                      {course.policy?.project > 0 && (
+                        <div className="bg-white p-2 rounded border">
+                          <p className="text-xs text-gray-500">Project ({course.policy.project}%)</p>
+                          <p className="font-semibold text-gray-900">{grade.marks?.project || 0}</p>
+                        </div>
+                      )}
+                      {course.policy?.assignment > 0 && (
+                        <div className="bg-white p-2 rounded border">
+                          <p className="text-xs text-gray-500">Assignment ({course.policy.assignment}%)</p>
+                          <p className="font-semibold text-gray-900">{grade.marks?.assignment || 0}</p>
+                        </div>
+                      )}
+                      {course.policy?.attendance > 0 && (
+                        <div className="bg-white p-2 rounded border">
+                          <p className="text-xs text-gray-500">Attendance ({course.policy.attendance}%)</p>
+                          <p className="font-semibold text-gray-900">{grade.marks?.attendance || 0}</p>
+                        </div>
+                      )}
+                      {course.policy?.participation > 0 && (
+                        <div className="bg-white p-2 rounded border">
+                          <p className="text-xs text-gray-500">Participation ({course.policy.participation}%)</p>
+                          <p className="font-semibold text-gray-900">{grade.marks?.participation || 0}</p>
+                        </div>
+                      )}
+                      {course.policy?.quizzes > 0 && course.quizCount > 0 && (
+                        <>
+                          {[...Array(course.quizCount)].map((_, i) => (
+                            <div key={i} className="bg-white p-2 rounded border">
+                              <p className="text-xs text-gray-500">Quiz {i + 1}</p>
+                              <p className="font-semibold text-gray-900">{grade.marks?.[`quiz${i + 1}`] || 0}</p>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

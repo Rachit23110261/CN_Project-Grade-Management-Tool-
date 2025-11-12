@@ -212,22 +212,54 @@ export default function ProfessorChallenges() {
 
               <div className="mb-6">
                 <h4 className="font-semibold text-gray-900 mb-2">Grade Details</h4>
-                <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-500">Midterm</p>
-                    <p className="font-semibold">{selectedChallenge.grade?.midterm || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Endterm</p>
-                    <p className="font-semibold">{selectedChallenge.grade?.endterm || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Assignment</p>
-                    <p className="font-semibold">{selectedChallenge.grade?.assignment || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Total</p>
-                    <p className="font-semibold text-indigo-600">{selectedChallenge.grade?.total || "N/A"}</p>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedChallenge.course?.policy?.midsem > 0 && (
+                      <div className="bg-white p-2 rounded border">
+                        <p className="text-xs text-gray-500">Midsem ({selectedChallenge.course.policy.midsem}%)</p>
+                        <p className="font-semibold">{selectedChallenge.grade?.marks?.midsem || 0}</p>
+                      </div>
+                    )}
+                    {selectedChallenge.course?.policy?.endsem > 0 && (
+                      <div className="bg-white p-2 rounded border">
+                        <p className="text-xs text-gray-500">Endsem ({selectedChallenge.course.policy.endsem}%)</p>
+                        <p className="font-semibold">{selectedChallenge.grade?.marks?.endsem || 0}</p>
+                      </div>
+                    )}
+                    {selectedChallenge.course?.policy?.project > 0 && (
+                      <div className="bg-white p-2 rounded border">
+                        <p className="text-xs text-gray-500">Project ({selectedChallenge.course.policy.project}%)</p>
+                        <p className="font-semibold">{selectedChallenge.grade?.marks?.project || 0}</p>
+                      </div>
+                    )}
+                    {selectedChallenge.course?.policy?.assignment > 0 && (
+                      <div className="bg-white p-2 rounded border">
+                        <p className="text-xs text-gray-500">Assignment ({selectedChallenge.course.policy.assignment}%)</p>
+                        <p className="font-semibold">{selectedChallenge.grade?.marks?.assignment || 0}</p>
+                      </div>
+                    )}
+                    {selectedChallenge.course?.policy?.attendance > 0 && (
+                      <div className="bg-white p-2 rounded border">
+                        <p className="text-xs text-gray-500">Attendance ({selectedChallenge.course.policy.attendance}%)</p>
+                        <p className="font-semibold">{selectedChallenge.grade?.marks?.attendance || 0}</p>
+                      </div>
+                    )}
+                    {selectedChallenge.course?.policy?.participation > 0 && (
+                      <div className="bg-white p-2 rounded border">
+                        <p className="text-xs text-gray-500">Participation ({selectedChallenge.course.policy.participation}%)</p>
+                        <p className="font-semibold">{selectedChallenge.grade?.marks?.participation || 0}</p>
+                      </div>
+                    )}
+                    {selectedChallenge.course?.policy?.quizzes > 0 && selectedChallenge.course?.quizCount > 0 && (
+                      <>
+                        {[...Array(selectedChallenge.course.quizCount)].map((_, i) => (
+                          <div key={i} className="bg-white p-2 rounded border">
+                            <p className="text-xs text-gray-500">Quiz {i + 1}</p>
+                            <p className="font-semibold">{selectedChallenge.grade?.marks?.[`quiz${i + 1}`] || 0}</p>
+                          </div>
+                        ))}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -242,11 +274,25 @@ export default function ProfessorChallenges() {
               {selectedChallenge.attachmentName && (
                 <div className="mb-6">
                   <h4 className="font-semibold text-gray-900 mb-2">Attachment</h4>
-                  <div className="flex items-center space-x-2 text-indigo-600">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-center space-x-3 bg-gray-50 rounded-lg p-4">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
-                    <span>{selectedChallenge.attachmentName}</span>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{selectedChallenge.attachmentName}</p>
+                    </div>
+                    {selectedChallenge.attachmentUrl && (
+                      <a
+                        href={selectedChallenge.attachmentUrl}
+                        download={selectedChallenge.attachmentName}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        <span>Download</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               )}

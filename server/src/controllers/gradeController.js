@@ -245,4 +245,37 @@ export const uploadGradesFromCSV = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Get a single grade by ID (for challenge page)
+export const getGradeById = async (req, res) => {
+  const { gradeId } = req.params;
+
+  try {
+    const grade = await Grade.findById(gradeId).populate('student', 'name email').populate('course', 'name');
+    
+    if (!grade) {
+      return res.status(404).json({ message: "Grade not found" });
+    }
+
+    // Check if the user is authorized to view this grade
+    // Student can view their own grade, professor can view any grade in their course
+    const userId = req.user._id.toString();
+    const isStudent = grade.student._id.toString() === userId;
+    
+    if (!isStudent) {
+      // Check if user is the professor of the course
+      const course = await Course.findById(grade.course._id);
+      const isProfessor = course && course.professor.toString() === userId;
+      
+      if (!isProfessor) {
+        return res.status(403).json({ message: "Not authorized to view this grade" });
+      }
+    }
+
+    res.json(grade);
+  } catch (err) {
+    console.error("Error fetching grade by ID:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
   
