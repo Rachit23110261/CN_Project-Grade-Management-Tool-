@@ -118,4 +118,33 @@ export const updateCourse = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Update quiz count for a course (professor only)
+export const updateQuizCount = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if the logged-in professor owns this course
+    if (course.professor.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Not authorized to modify this course" });
+    }
+    
+    const { quizCount } = req.body;
+    
+    if (quizCount < 0 || quizCount > 10) {
+      return res.status(400).json({ message: "Quiz count must be between 0 and 10" });
+    }
+    
+    course.quizCount = quizCount;
+    await course.save();
+    
+    res.json({ message: "Quiz count updated successfully", course });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
   

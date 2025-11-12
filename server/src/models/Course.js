@@ -15,6 +15,7 @@ const courseSchema = new mongoose.Schema({
     attendance: { type: Number, default: 0 },
     participation: { type: Number, default: 0 },
   },
+  quizCount: { type: Number, default: 0, min: 0, max: 10 }, // Number of active quizzes
 }, { timestamps: true });
 
 

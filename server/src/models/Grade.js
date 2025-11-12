@@ -6,7 +6,17 @@ const gradeSchema = new mongoose.Schema({
   marks: {
     midsem: { type: Number, default: 0 },
     endsem: { type: Number, default: 0 },
-    quizzes: { type: Number, default: 0 },
+    quizzes: { type: Number, default: 0 }, // Keep for backward compatibility
+    quiz1: { type: Number, default: 0 },
+    quiz2: { type: Number, default: 0 },
+    quiz3: { type: Number, default: 0 },
+    quiz4: { type: Number, default: 0 },
+    quiz5: { type: Number, default: 0 },
+    quiz6: { type: Number, default: 0 },
+    quiz7: { type: Number, default: 0 },
+    quiz8: { type: Number, default: 0 },
+    quiz9: { type: Number, default: 0 },
+    quiz10: { type: Number, default: 0 },
     project: { type: Number, default: 0 },
     assignment: { type: Number, default: 0 },
     attendance: { type: Number, default: 0 },

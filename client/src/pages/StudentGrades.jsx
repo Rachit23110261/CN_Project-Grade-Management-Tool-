@@ -10,6 +10,7 @@ export default function StudentGrades() {
   const [gradeId, setGradeId] = useState(null);
   const [courseName, setCourseName] = useState("");
   const [coursePolicy, setCoursePolicy] = useState({});
+  const [quizCount, setQuizCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export default function StudentGrades() {
         const { course, studentGrades } = res.data;
         setCourseName(course?.name || "Course");
         setCoursePolicy(course?.policy || {});
+        setQuizCount(course?.quizCount || 0);
 
         if (Array.isArray(studentGrades) && studentGrades.length > 0) {
           setGrades(studentGrades[0].marks);
@@ -42,16 +44,43 @@ export default function StudentGrades() {
   // Filter assessments to only show those with policy > 0 AND score > 0
   const getVisibleAssessments = () => {
     if (!grades || !coursePolicy) return [];
-    return Object.entries(grades).filter(([key, value]) => {
-      const policyWeight = coursePolicy[key] || 0;
+    const visible = [];
+    
+    Object.entries(grades).forEach(([key, value]) => {
       const score = typeof value === 'number' ? value : 0;
-      return policyWeight > 0 && score > 0;
+      
+      // Skip the main 'quizzes' key as we'll show individual quizzes
+      if (key === 'quizzes') return;
+      
+      // Handle individual quiz grades
+      if (key.startsWith('quiz')) {
+        const quizNum = parseInt(key.replace('quiz', ''));
+        if (quizNum <= quizCount && score > 0) {
+          visible.push([key, value]);
+        }
+      } else {
+        // Handle other assessments
+        const policyWeight = coursePolicy[key] || 0;
+        if (policyWeight > 0 && score > 0) {
+          visible.push([key, value]);
+        }
+      }
     });
+    
+    return visible;
   };
 
   // Calculate weighted score contribution for an assessment
   const calculateWeightedScore = (score, key) => {
-    const policyWeight = coursePolicy[key] || 0;
+    let policyWeight;
+    
+    if (key.startsWith('quiz')) {
+      // For individual quizzes, divide total quiz weight by quiz count
+      policyWeight = quizCount > 0 ? (coursePolicy.quizzes / quizCount) : 0;
+    } else {
+      policyWeight = coursePolicy[key] || 0;
+    }
+    
     return (score / 100) * policyWeight;
   };
 
@@ -215,8 +244,21 @@ export default function StudentGrades() {
                       {visibleAssessments.map(([key, value], index) => {
                         const score = typeof value === 'number' ? value : 0;
                         const displayValue = score === 0 ? "-" : value;
-                        const policyWeight = coursePolicy[key] || 0;
+                        
+                        // Calculate weight for this assessment
+                        let policyWeight;
+                        if (key.startsWith('quiz')) {
+                          policyWeight = quizCount > 0 ? (coursePolicy.quizzes / quizCount).toFixed(2) : 0;
+                        } else {
+                          policyWeight = coursePolicy[key] || 0;
+                        }
+                        
                         const weightedContribution = calculateWeightedScore(score, key);
+                        
+                        // Format display name
+                        const displayName = key.startsWith('quiz') 
+                          ? key.replace('quiz', 'Quiz ') 
+                          : key.replace(/_/g, ' ');
                         
                         return (
                           <div key={index} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors">
@@ -229,7 +271,7 @@ export default function StudentGrades() {
                                 </div>
                                 <div>
                                   <h3 className="text-lg font-semibold text-gray-900 capitalize">
-                                    {key.replace(/_/g, ' ')}
+                                    {displayName}
                                   </h3>
                                   <div className="flex items-center space-x-3 text-sm text-gray-600 mt-1">
                                     <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
