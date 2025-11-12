@@ -40,6 +40,7 @@ const courseSchema = new mongoose.Schema({
   },
   quizCount: { type: Number, default: 0, min: 0, max: 10 }, // Number of active quizzes
   assignmentCount: { type: Number, default: 0, min: 0, max: 5 }, // Number of active assignments
+  letterGradesPublished: { type: Boolean, default: false }, // Whether letter grades are published to students
 }, { timestamps: true });
 
 

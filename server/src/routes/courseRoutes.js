@@ -1,6 +1,6 @@
 import express from "express";
 import { verifyToken, isProfessor, isStudent } from "../middleware/authMiddleware.js";
-import { createCourse, getAllCourses, joinCourse, getMyCourses, getCourseById, updateCourse, updateQuizCount, updateAssignmentCount, updateMaxMarks } from "../controllers/courseController.js";
+import { createCourse, getAllCourses, joinCourse, getMyCourses, getCourseById, updateCourse, updateQuizCount, updateAssignmentCount, updateMaxMarks, toggleLetterGradePublishing } from "../controllers/courseController.js";
 
 const router = express.Router();
 
@@ -11,6 +11,7 @@ router.put("/:courseId", verifyToken, isProfessor, updateCourse);
 router.put("/:courseId/quiz-count", verifyToken, isProfessor, updateQuizCount);
 router.put("/:courseId/assignment-count", verifyToken, isProfessor, updateAssignmentCount);
 router.put("/:courseId/max-marks", verifyToken, isProfessor, updateMaxMarks);
+router.put("/:courseId/toggle-letter-grades", verifyToken, isProfessor, toggleLetterGradePublishing);
 router.get("/", verifyToken, getAllCourses);
 router.post("/:id/join", verifyToken, isStudent, joinCourse);
 

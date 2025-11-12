@@ -222,4 +222,33 @@ export const updateMaxMarks = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Toggle letter grade publishing (professor only)
+export const toggleLetterGradePublishing = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.courseId);
+    
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if the logged-in professor owns this course
+    if (course.professor.toString() !== req.user.id.toString()) {
+      return res.status(403).json({ message: "Not authorized to modify this course" });
+    }
+    
+    // Toggle the publishing status
+    course.letterGradesPublished = !course.letterGradesPublished;
+    await course.save();
+    
+    res.json({ 
+      message: `Letter grades ${course.letterGradesPublished ? 'published' : 'unpublished'} successfully`, 
+      letterGradesPublished: course.letterGradesPublished,
+      course 
+    });
+  } catch (error) {
+    console.error("Error toggling letter grade publishing:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
   

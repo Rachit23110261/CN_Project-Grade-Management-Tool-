@@ -117,8 +117,97 @@ export const updateCourseGrades = async (req, res) => {
       const course = await Course.findById(courseId);
   
       if (!course) return res.status(404).json({ message: "Course not found" });
-  
+
       console.log("Found grade:", grade);
+
+      // Calculate letter grade if published
+      let letterGrade = null;
+      if (course.letterGradesPublished && grade) {
+        // Calculate weighted score for this student
+        const policy = course.policy;
+        const quizCount = course.quizCount || 0;
+        const assignmentCount = course.assignmentCount || 0;
+        const maxMarks = course.maxMarks || {};
+        let weightedScore = 0;
+        const marks = grade.marks;
+
+        Object.keys(policy).forEach(key => {
+          if (policy[key] > 0) {
+            if (key === 'quizzes' && quizCount > 0) {
+              for (let i = 1; i <= quizCount; i++) {
+                const quizKey = `quiz${i}`;
+                const score = marks[quizKey] || 0;
+                const max = maxMarks[quizKey] || 100;
+                const weight = policy.quizzes / quizCount;
+                weightedScore += (score / max) * weight;
+              }
+            } else if (key === 'assignment' && assignmentCount > 0) {
+              for (let i = 1; i <= assignmentCount; i++) {
+                const assignmentKey = `assignment${i}`;
+                const score = marks[assignmentKey] || 0;
+                const max = maxMarks[assignmentKey] || 100;
+                const weight = policy.assignment / assignmentCount;
+                weightedScore += (score / max) * weight;
+              }
+            } else if (key !== 'quizzes' && key !== 'assignment') {
+              const score = marks[key] || 0;
+              const max = maxMarks[key] || 100;
+              weightedScore += (score / max) * policy[key];
+            }
+          }
+        });
+
+        // Calculate overall statistics for all students
+        const allGrades = await Grade.find({ course: courseId });
+        const allWeightedScores = allGrades.map(g => {
+          let ws = 0;
+          const m = g.marks;
+          Object.keys(policy).forEach(key => {
+            if (policy[key] > 0) {
+              if (key === 'quizzes' && quizCount > 0) {
+                for (let i = 1; i <= quizCount; i++) {
+                  const quizKey = `quiz${i}`;
+                  const score = m[quizKey] || 0;
+                  const max = maxMarks[quizKey] || 100;
+                  const weight = policy.quizzes / quizCount;
+                  ws += (score / max) * weight;
+                }
+              } else if (key === 'assignment' && assignmentCount > 0) {
+                for (let i = 1; i <= assignmentCount; i++) {
+                  const assignmentKey = `assignment${i}`;
+                  const score = m[assignmentKey] || 0;
+                  const max = maxMarks[assignmentKey] || 100;
+                  const weight = policy.assignment / assignmentCount;
+                  ws += (score / max) * weight;
+                }
+              } else if (key !== 'quizzes' && key !== 'assignment') {
+                const score = m[key] || 0;
+                const max = maxMarks[key] || 100;
+                ws += (score / max) * policy[key];
+              }
+            }
+          });
+          return ws;
+        });
+
+        const mean = allWeightedScores.reduce((a, b) => a + b, 0) / allWeightedScores.length;
+        const variance = allWeightedScores.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allWeightedScores.length;
+        const stdDev = Math.sqrt(variance);
+
+        // Calculate letter grade based on z-score
+        if (stdDev > 0) {
+          const zScore = (weightedScore - mean) / stdDev;
+          if (zScore >= 1.5) letterGrade = "A+";
+          else if (zScore >= 1.0) letterGrade = "A";
+          else if (zScore >= 0.5) letterGrade = "A-";
+          else if (zScore >= 0.0) letterGrade = "B";
+          else if (zScore >= -0.5) letterGrade = "C";
+          else if (zScore >= -1.0) letterGrade = "D";
+          else if (zScore >= -1.5) letterGrade = "E";
+          else if (zScore >= -2.0) letterGrade = "F";
+          else letterGrade = "FAIL";
+        }
+      }
       
       res.json({
         course: {
@@ -126,7 +215,9 @@ export const updateCourseGrades = async (req, res) => {
           code: course.code,
           policy: course.policy,
           quizCount: course.quizCount || 0,
+          assignmentCount: course.assignmentCount || 0,
           maxMarks: course.maxMarks || {},
+          letterGradesPublished: course.letterGradesPublished || false,
         },
         studentGrades: grade ? [{
           _id: grade._id,
@@ -134,6 +225,7 @@ export const updateCourseGrades = async (req, res) => {
           marks: grade.marks
         }] : [],
         marks: grade ? grade.marks : null,
+        letterGrade: letterGrade,
       });
     } catch (err) {
       console.log("Error fetching student grades:", err);
