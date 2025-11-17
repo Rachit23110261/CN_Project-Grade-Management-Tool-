@@ -1,12 +1,12 @@
 import jwt from "jsonwebtoken";
-import User from "../models/userModel.js";
+import User, { enhanceUser } from "../models/userModel.js";
 import { sendPasswordResetEmail, sendWelcomeEmail } from "../services/emailService.js";
 import crypto from "crypto";
 
 // Generate JWT Token
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user.id, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -29,16 +29,15 @@ export const registerUser = async (req, res, next) => {
     
     // Send welcome email with credentials
     try {
-      await sendWelcomeEmail(email, email, password, role);
-      console.log(`Welcome email sent to ${email}`);
-    } catch (emailError) {
+      await sendWelcomeEmail(email, password, role);
+    } catch (emailErr) {
       console.error("Failed to send welcome email:", emailError);
       // Don't fail registration if email fails
     }
     
     res.status(201).json({
       message: "User registered successfully and welcome email sent",
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
     next(err);
@@ -50,10 +49,11 @@ export const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     console.log(req.body)
-    const user = await User.findOne({ email });
-    console.log(user)
-    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+    const userRow = await User.findOne({ email });
+    console.log(userRow)
+    if (!userRow) return res.status(401).json({ message: "Invalid credentials" });
     
+    const user = enhanceUser(userRow);
     let isMatch = false;
     let usedTempPassword = false;
     
@@ -68,7 +68,6 @@ export const loginUser = async (req, res, next) => {
         
         // Don't clear temp password yet - keep it for 1 hour so user can use it in change password
         // It will expire automatically based on tempPasswordExpires
-        console.log(`✅ User ${user.email} logged in with temporary password (still valid until expiry)`);
       }
     }
     
@@ -77,7 +76,7 @@ export const loginUser = async (req, res, next) => {
     const token = generateToken(user);
     res.json({
       token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
       usedTempPassword, // Flag to notify frontend
       message: usedTempPassword ? "Logged in with temporary password. Please change your password immediately." : undefined
     });
@@ -91,18 +90,20 @@ export const forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
 
-    // Find user by email (case-insensitive)
-    const user = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
-    if (!user) {
+    // Find user by email (PostgreSQL uses ILIKE for case-insensitive search)
+    const userRow = await User.findOne({ email });
+    if (!userRow) {
       return res.status(404).json({ message: "No account found with this email address" });
     }
+
+    const user = enhanceUser(userRow);
 
     // Generate temporary password
     const tempPassword = generateRandomPassword();
 
     // Set temporary password (expires in 1 hour) - does NOT override main password
-    user.tempPassword = tempPassword; // Will be hashed by pre-save hook
-    user.tempPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    user.temp_password = tempPassword; // Will be hashed by save method
+    user.temp_password_expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
     await user.save();
 
     // Development mode: Log password to console
@@ -112,7 +113,7 @@ export const forgotPassword = async (req, res, next) => {
       console.log("========================================");
       console.log(`Email: ${user.email}`);
       console.log(`Temporary Password: ${tempPassword}`);
-      console.log(`Expires: ${user.tempPasswordExpires}`);
+      console.log(`Expires: ${user.temp_password_expires}`);
       console.log("========================================\n");
     }
 
@@ -166,10 +167,12 @@ export const changePassword = async (req, res, next) => {
     }
 
     // Find user
-    const user = await User.findById(userId);
-    if (!user) {
+    const userRow = await User.findById(userId);
+    if (!userRow) {
       return res.status(404).json({ message: "User not found" });
     }
+
+    const user = enhanceUser(userRow);
 
     // Verify current password - check both main password and temp password
     let isMatch = await user.matchPassword(currentPassword);
@@ -189,9 +192,9 @@ export const changePassword = async (req, res, next) => {
     }
 
     // Update password and clear temporary password
-    user.password = newPassword; // Will be hashed by pre-save hook
-    user.tempPassword = null; // Clear temp password after successful password change
-    user.tempPasswordExpires = null;
+    user.password = newPassword; // Will be hashed by save method
+    user.temp_password = null; // Clear temp password after successful password change
+    user.temp_password_expires = null;
     await user.save();
 
     res.json({

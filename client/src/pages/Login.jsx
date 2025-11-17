@@ -179,8 +179,17 @@ export default function Login() {
 
           {/* Footer */}
           <div className="px-8 py-6 bg-gray-50 border-t border-gray-200">
-            <p className="text-center text-sm text-gray-600">
+            <p className="text-center text-sm text-gray-600 mb-3">
               Grade Management System • IIT Gandhinagar
+            </p>
+            <p className="text-center text-sm text-gray-600">
+              Don't have an account?{" "}
+              <button
+                onClick={() => navigate("/register")}
+                className="text-indigo-600 hover:text-indigo-700 font-semibold hover:underline transition-colors"
+              >
+                Register Here
+              </button>
             </p>
           </div>
         </div>

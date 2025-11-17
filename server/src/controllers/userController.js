@@ -15,9 +15,17 @@ export const getUsersByRole = async (req, res) => {
     if (!validRoles.includes(role))
       return res.status(400).json({ message: "Invalid role" });
 
-    const users = await User.find({ role }).select("-password");
-    res.status(200).json(users);
+    const users = await User.find({ role });
+    
+    // Remove password field from response
+    const sanitizedUsers = users.map(user => {
+      const { password, temp_password, ...rest } = user;
+      return rest;
+    });
+    
+    res.status(200).json(sanitizedUsers);
   } catch (err) {
+    console.error("Error in getUsersByRole:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -73,15 +81,14 @@ export const bulkRegisterUsers = async (req, res) => {
 
         // Send welcome email
         try {
-          await sendWelcomeEmail(email, email, password, role);
-          console.log(`Welcome email sent to ${email}`);
-        } catch (emailError) {
+          await sendWelcomeEmail(email, password, role);
+        } catch (emailErr) {
           console.error(`Failed to send welcome email to ${email}:`, emailError);
           // Continue even if email fails
         }
 
         results.success.push({
-          id: user._id,
+          id: user.id,
           name: user.name,
           email: user.email,
           role: user.role
@@ -103,5 +110,97 @@ export const bulkRegisterUsers = async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+// Delete a user account (Admin only)
+export const deleteUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Prevent admin from deleting themselves
+    if (parseInt(userId) === req.user.id) {
+      return res.status(400).json({ message: "Cannot delete your own account" });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    // Prevent deleting other admins
+    if (user.role === 'admin') {
+      return res.status(403).json({ message: "Cannot delete admin accounts" });
+    }
+    
+    // If professor, implement cascade delete with proper checks
+    if (user.role === 'professor') {
+      const Course = (await import('../models/Course.js')).default;
+      const Grade = (await import('../models/Grade.js')).default;
+      
+      const courses = await Course.find({ professor: userId });
+      
+      // Check if any course has enrolled students
+      let totalStudents = 0;
+      const coursesWithStudents = [];
+      
+      for (const course of courses) {
+        const students = await Course.getStudents(course.id);
+        if (students && students.length > 0) {
+          totalStudents += students.length;
+          coursesWithStudents.push({
+            name: course.name,
+            studentCount: students.length
+          });
+        }
+      }
+      
+      // If students are enrolled, don't allow deletion
+      if (totalStudents > 0) {
+        const courseList = coursesWithStudents
+          .map(c => `"${c.name}" (${c.studentCount} students)`)
+          .join(', ');
+        
+        return res.status(400).json({ 
+          message: `Cannot delete professor with active students. Professor has ${totalStudents} students enrolled across ${coursesWithStudents.length} course(s): ${courseList}. Remove all students first.`,
+          coursesWithStudents
+        });
+      }
+      
+      // CASCADE DELETE: Delete all courses and their associated grades
+      // This is safe because we verified no students are enrolled
+      for (const course of courses) {
+        // Delete all grades for this course
+        await Grade.deleteMany({ course: course.id });
+        
+        // Delete the course
+        await Course.findByIdAndDelete(course.id);
+      }
+    }
+    
+    // If student, CASCADE DELETE: unenroll from all courses and delete grades
+    if (user.role === 'student') {
+      const Course = (await import('../models/Course.js')).default;
+      const Grade = (await import('../models/Grade.js')).default;
+      
+      const enrolledCourses = await User.getEnrolledCourses(userId);
+      
+      for (const courseId of enrolledCourses) {
+        // Remove student from course
+        await Course.removeStudent(courseId, userId);
+        
+        // Delete all grades for this student in this course
+        await Grade.deleteMany({ student: userId, course: courseId });
+      }
+    }
+    
+    // Delete the user
+    await User.findByIdAndDelete(userId);
+    
+    res.json({ 
+      message: `${user.role === 'professor' ? 'Professor' : 'Student'} account and associated data deleted successfully`
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete user" });
   }
 };

@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import User from "../models/userModel.js";
+import User, { enhanceUser } from "../models/userModel.js";
 
 // Middleware: Protect routes (verify JWT)
 export const protect = async (req, res, next) => {
@@ -10,11 +10,13 @@ export const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      req.user = await User.findById(decoded.id).select("-password");
-      if (!req.user) {
+      const userRow = await User.findById(decoded.id);
+      if (!userRow) {
         return res.status(401).json({ message: "User not found" });
       }
 
+      // Enhance user with methods
+      req.user = enhanceUser(userRow);
       next();
     } catch (error) {
       return res.status(401).json({ message: "Not authorized, token failed" });
@@ -64,10 +66,13 @@ export const verifyToken = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id).select("-password");
-    if (!req.user) {
+    const userRow = await User.findById(decoded.id);
+    if (!userRow) {
       return res.status(401).json({ message: "User not found" });
     }
+    
+    // Enhance user with methods
+    req.user = enhanceUser(userRow);
     next();
   } catch (err) {
     res.status(401).json({ message: "Token is not valid" });

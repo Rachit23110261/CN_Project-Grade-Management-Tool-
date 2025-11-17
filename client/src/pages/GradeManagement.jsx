@@ -16,6 +16,9 @@ export default function GradeManagement() {
   const [uploading, setUploading] = useState(false);
   const [showMaxMarksModal, setShowMaxMarksModal] = useState(false);
   const [maxMarks, setMaxMarks] = useState({});
+  const [removingStudent, setRemovingStudent] = useState(null);
+  const [showGradingScaleModal, setShowGradingScaleModal] = useState(false);
+  const [gradingScale, setGradingScale] = useState({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,6 +28,16 @@ export default function GradeManagement() {
         setQuizCount(res.data.course.quizCount || 0);
         setAssignmentCount(res.data.course.assignmentCount || 0);
         setMaxMarks(res.data.course.maxMarks || {});
+        setGradingScale(res.data.course.gradingScale || {
+          "A+": 1.5,
+          "A": 1.0,
+          "A-": 0.5,
+          "B": 0.0,
+          "C": -0.5,
+          "D": -1.0,
+          "E": -1.5,
+          "F": -2.0
+        });
 
         // Initialize grades - create deep copy to avoid shared references
         const g = {};
@@ -194,11 +207,58 @@ export default function GradeManagement() {
     }
   };
 
+  const handleRemoveStudent = async (studentId, studentName) => {
+    if (!window.confirm(`Are you sure you want to remove ${studentName} from this course?`)) {
+      return;
+    }
+
+    setRemovingStudent(studentId);
+    try {
+      await api.delete(`/courses/${courseId}/students/${studentId}`);
+      alert("✓ Student removed successfully!");
+      
+      // Refresh course data
+      const res = await api.get(`/grades/${courseId}`);
+      setCourse(res.data.course);
+      
+      // Update grades - remove the student
+      const updatedGrades = { ...grades };
+      delete updatedGrades[studentId];
+      setGrades(updatedGrades);
+    } catch (err) {
+      alert(err.response?.data?.message || "Error removing student");
+    } finally {
+      setRemovingStudent(null);
+    }
+  };
+
+  const handleGradingScaleChange = (grade, value) => {
+    setGradingScale(prev => ({
+      ...prev,
+      [grade]: Number(value)
+    }));
+  };
+
+  const handleSaveGradingScale = async () => {
+    try {
+      const response = await api.put(`/courses/${courseId}/grading-scale`, { gradingScale });
+      setCourse(response.data.course);
+      setGradingScale(response.data.course.gradingScale);
+      setShowGradingScaleModal(false);
+      alert("Grading scale updated successfully!");
+    } catch (err) {
+      console.error("Error updating grading scale:", err);
+      alert(err.response?.data?.message || "Error updating grading scale");
+    }
+  };
+
   if (loading) return <p>Loading...</p>;
 
   // Get active components and expand quizzes if needed
   const getActiveComponents = () => {
     const components = [];
+    if (!course.policy) return components;
+    
     Object.keys(course.policy).forEach(key => {
       if (course.policy[key] > 0) {
         if (key === 'quizzes' && quizCount > 0) {
@@ -207,15 +267,21 @@ export default function GradeManagement() {
             components.push(`quiz${i}`);
           }
         } else if (key === 'assignment' && assignmentCount > 0) {
-          // Add individual assignment columns
+          // Add individual assignment columns - only if assignmentCount is set
           for (let i = 1; i <= assignmentCount; i++) {
             components.push(`assignment${i}`);
           }
         } else if (key !== 'quizzes' && key !== 'assignment') {
+          // Add other components (midsem, endsem, project, attendance, participation)
           components.push(key);
         }
       }
     });
+    
+    console.log("Active components:", components);
+    console.log("Course policy:", course.policy);
+    console.log("Quiz count:", quizCount, "Assignment count:", assignmentCount);
+    
     return components;
   };
 
@@ -275,6 +341,15 @@ export default function GradeManagement() {
               </svg>
               Set Max Marks
             </button>
+            <button
+              onClick={() => setShowGradingScaleModal(true)}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              Grading Scale
+            </button>
           </div>
         </div>
         
@@ -309,19 +384,22 @@ export default function GradeManagement() {
                   <tr>
                     <th className="border p-2 sticky left-0 bg-gray-100 z-10">Student</th>
                     {activeComponents.map(key => {
-                      const isQuiz = key.startsWith('quiz');
-                      const isAssignment = key.startsWith('assignment');
+                      const isQuiz = key.startsWith('quiz') && key !== 'quizzes';
+                      const isAssignment = key.startsWith('assignment') && key.match(/assignment\d+/);
                       let displayName;
                       let weight;
                       
                       if (isQuiz) {
-                        displayName = key.toUpperCase().replace('QUIZ', 'Quiz ');
+                        const quizNum = key.replace('quiz', '');
+                        displayName = `Quiz ${quizNum}`;
                         weight = quizWeightPerQuiz;
                       } else if (isAssignment) {
-                        displayName = key.toUpperCase().replace('ASSIGNMENT', 'Assignment ');
+                        const assignmentNum = key.replace('assignment', '');
+                        displayName = `Assignment ${assignmentNum}`;
                         weight = assignmentWeightPerAssignment;
                       } else {
-                        displayName = key.toUpperCase();
+                        // Format other keys (midsem, endsem, project, etc.)
+                        displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
                         weight = course.policy[key];
                       }
                       
@@ -335,17 +413,18 @@ export default function GradeManagement() {
                         </th>
                       );
                     })}
+                    <th className="border p-2 bg-gray-100">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.keys(grades).map(studentId => {
-                    const student = course.students.find(s => s._id === studentId);
+                    const student = course.students.find(s => s.id == studentId || s._id == studentId);
                     return (
                       <tr key={studentId}>
                         <td className="border p-2 sticky left-0 bg-white">
-                          <div className="font-semibold">{student?.name}</div>
-                          <div className="text-xs text-gray-500">{student?.email}</div>
-                          <div className="text-xs text-gray-400 font-mono">ID: {studentId.slice(-6)}</div>
+                          <div className="font-semibold">{student?.name || 'Unknown Student'}</div>
+                          <div className="text-xs text-gray-500">{student?.email || 'N/A'}</div>
+                          <div className="text-xs text-gray-400 font-mono">ID: {studentId.toString().slice(-6)}</div>
                         </td>
                         {activeComponents.map(key => {
                           const max = maxMarks[key] || 100;
@@ -364,6 +443,30 @@ export default function GradeManagement() {
                             </td>
                           );
                         })}
+                        <td className="border p-2 text-center">
+                          <button
+                            onClick={() => handleRemoveStudent(studentId, student?.name)}
+                            disabled={removingStudent === studentId}
+                            className="bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center gap-1 mx-auto"
+                          >
+                            {removingStudent === studentId ? (
+                              <>
+                                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Removing...
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Remove
+                              </>
+                            )}
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -512,6 +615,120 @@ export default function GradeManagement() {
                   className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
                 >
                   Save Max Marks
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Grading Scale Modal */}
+      {showGradingScaleModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowGradingScaleModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-white">Grading Scale Configuration</h3>
+                <p className="text-indigo-100 text-sm">Set Z-score thresholds for letter grades</p>
+              </div>
+              <button
+                onClick={() => setShowGradingScaleModal(false)}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start gap-2">
+                  <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-blue-900 mb-1">About Z-Score Grading</h4>
+                    <p className="text-sm text-blue-700">
+                      Z-scores measure how many standard deviations a student's score is from the mean. 
+                      Higher thresholds = stricter grading. Default values follow standard bell curve distribution.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {Object.entries(gradingScale).sort((a, b) => b[1] - a[1]).map(([grade, threshold]) => (
+                  <div key={grade} className="flex items-center gap-4 bg-gray-50 rounded-lg p-4">
+                    <div className="flex-shrink-0 w-16 text-center">
+                      <span className="text-2xl font-bold text-gray-900">{grade}</span>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Z-Score Threshold
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={threshold}
+                        onChange={(e) => handleGradingScaleChange(grade, e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex-shrink-0 text-sm text-gray-500">
+                      σ ≥ {threshold}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold text-gray-900 mb-2">Standard Values Reference:</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                  <div>• A+: 1.5σ (Top 7%)</div>
+                  <div>• B: 0.0σ (Average)</div>
+                  <div>• A: 1.0σ (Top 16%)</div>
+                  <div>• C: -0.5σ (Below avg)</div>
+                  <div>• A-: 0.5σ (Above avg)</div>
+                  <div>• D: -1.0σ (Bottom 16%)</div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setGradingScale({
+                      "A+": 1.5,
+                      "A": 1.0,
+                      "A-": 0.5,
+                      "B": 0.0,
+                      "C": -0.5,
+                      "D": -1.0,
+                      "E": -1.5,
+                      "F": -2.0
+                    });
+                  }}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Reset to Default
+                </button>
+                <button
+                  onClick={() => setShowGradingScaleModal(false)}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveGradingScale}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                >
+                  Save Grading Scale
                 </button>
               </div>
             </div>

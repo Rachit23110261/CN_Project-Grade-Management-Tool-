@@ -8,7 +8,9 @@ import userRoutes from "./routes/userRoutes.js";
 import courseRoutes from "./routes/courseRoutes.js";
 import gradeRoutes from "./routes/gradeRoutes.js";
 import challengeRoutes from "./routes/challengeRoutes.js";
+import registrationRoutes from "./routes/registrationRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
 import Course from "./models/Course.js";
 
 // Load environment variables
@@ -19,6 +21,9 @@ const app = express();
 
 // Connect to MongoDB
 connectDB();
+
+// Apply rate limiting to all API routes
+app.use("/api/", apiLimiter);
 
 // Middleware
 app.use(cors({
@@ -33,8 +38,8 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '100mb' })); // for parsing application/json with larger payload (increased for base64 attachments)
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+app.use(express.json({ limit: '10mb' })); // Reduced from 100mb for security
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Base route
 app.get("/", (req, res) => {
@@ -47,6 +52,7 @@ app.use("/api/users", userRoutes)
 app.use("/api/courses", courseRoutes);
 app.use("/api/grades", gradeRoutes);
 app.use("/api/challenges", challengeRoutes);
+app.use("/api/registration", registrationRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

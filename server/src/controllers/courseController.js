@@ -3,27 +3,53 @@ import User from "../models/userModel.js";
 
 export const createCourse = async (req, res) => {
   try {
-    console.log(req.body)
+    // Validate policy if provided
+    if (req.body.policy) {
+      const policyValues = Object.values(req.body.policy);
+      
+      // Check all values are between 0 and 100
+      if (!policyValues.every(v => typeof v === 'number' && v >= 0 && v <= 100)) {
+        return res.status(400).json({ message: "All policy percentages must be between 0 and 100" });
+      }
+      
+      // Check that percentages sum to 100
+      const total = policyValues.reduce((a, b) => a + b, 0);
+      if (Math.abs(total - 100) > 0.01) {
+        return res.status(400).json({ message: "Policy percentages must total 100%" });
+      }
+    }
+    
     const course = await Course.create({
       name: req.body.name,
       code: req.body.code,
       description: req.body.description,
-      professor: req.user.id,
+      professor: req.user.id, // Changed from professorId to professor
+      policy: req.body.policy || {},
+      maxMarks: req.body.maxMarks || {},
+      quizCount: req.body.quizCount || 0,
+      assignmentCount: req.body.assignmentCount || 0
     });
     res.status(201).json(course);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Failed to create course" });
   }
 };
 
 export const getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.find().populate("professor", "name email");
-    const user = await User.findById(req.user.id);
+    // Get all courses (already populated with professor)
+    const courses = await Course.find();
+    
+    // Get enrolled course IDs for this student
+    const enrolledIds = await User.getEnrolledCourses(req.user.id);
+    
+    // Get enrolled courses with professor info
+    const enrolledCourses = await Promise.all(
+      enrolledIds.map(id => Course.findById(id))
+    );
 
-    // Return both all courses and enrolledCourses
     res.json({
-      enrolledCourses: await Course.find({ _id: { $in: user.enrolledCourses } }).populate("professor", "name email"),
+      enrolledCourses: enrolledCourses.filter(c => c !== null),
       allCourses: courses
     });
   } catch (error) {
@@ -34,9 +60,15 @@ export const getAllCourses = async (req, res) => {
 // Get all courses created by this professor
 export const getMyCourses = async (req, res) => {
   try {
-    const courses = await Course.find({ professor: req.user.id })
-      .populate("students", "name email")
-      .populate("professor", "name email"); // optional
+    let courses = await Course.find({ professor: req.user.id }); // Changed from professorId to professor
+    
+    // Populate students and professor for each course
+    courses = await Promise.all(
+      courses.map(async (course) => {
+        return await Course.populate(course, ['students', 'professor']);
+      })
+    );
+    
     res.json(courses);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -49,16 +81,18 @@ export const getMyCourses = async (req, res) => {
 export const joinCourse = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
-    const user = await User.findById(req.user.id);
 
     if (!course) return res.status(404).json({ message: "Course not found" });
-    if (user.enrolledCourses.includes(course._id))
-      return res.status(400).json({ message: "Already joined" });
 
-    user.enrolledCourses.push(course._id);
-    course.students.push(user._id);
-    await user.save();
-    await course.save();
+    // Check if already enrolled
+    const enrolledIds = await User.getEnrolledCourses(req.user.id);
+    if (enrolledIds.includes(course.id)) {
+      return res.status(400).json({ message: "Already joined" });
+    }
+
+    // Enroll user in course
+    await User.enrollCourse(req.user.id, course.id);
+    await Course.addStudent(course.id, req.user.id);
 
     res.json({ message: "Course joined successfully", course });
   } catch (error) {
@@ -69,13 +103,14 @@ export const joinCourse = async (req, res) => {
 // Get a single course by ID
 export const getCourseById = async (req, res) => {
   try {
-    const course = await Course.findById(req.params.courseId)
-      .populate("professor", "name email")
-      .populate("students", "name email");
+    let course = await Course.findById(req.params.courseId);
     
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
+    
+    // Populate professor and students
+    course = await Course.populate(course, ['professor', 'students']);
     
     res.json(course);
   } catch (error) {
@@ -92,30 +127,36 @@ export const updateCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
     
+    // Check if professorId exists (data integrity check)
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
     // Check if the logged-in professor owns this course
-    if (course.professor.toString() !== req.user.id.toString()) {
+    if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to edit this course" });
     }
     
     // Validate policy if provided
     if (req.body.policy) {
       const total = Object.values(req.body.policy).reduce((a, b) => a + b, 0);
-      if (total !== 100) {
+      if (Math.abs(total - 100) > 0.01) {
         return res.status(400).json({ message: "Policy percentages must total 100%" });
       }
     }
     
-    // Update course fields
-    if (req.body.name) course.name = req.body.name;
-    if (req.body.code) course.code = req.body.code;
-    if (req.body.description) course.description = req.body.description;
-    if (req.body.policy) course.policy = req.body.policy;
+    // Build update data
+    const updateData = {};
+    if (req.body.name) updateData.name = req.body.name;
+    if (req.body.code) updateData.code = req.body.code;
+    if (req.body.description) updateData.description = req.body.description;
+    if (req.body.policy) updateData.policy = req.body.policy;
     
-    await course.save();
+    const updatedCourse = await Course.findByIdAndUpdate(req.params.courseId, updateData, { new: true });
     
-    res.json(course);
+    res.json(updatedCourse);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Failed to update course" });
   }
 };
 
@@ -128,8 +169,13 @@ export const updateQuizCount = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
     
+    // Check if professorId exists (data integrity check)
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
     // Check if the logged-in professor owns this course
-    if (course.professor.toString() !== req.user.id.toString()) {
+    if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to modify this course" });
     }
     
@@ -139,12 +185,15 @@ export const updateQuizCount = async (req, res) => {
       return res.status(400).json({ message: "Quiz count must be between 0 and 10" });
     }
     
-    course.quizCount = quizCount;
-    await course.save();
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.courseId,
+      { quizCount },
+      { new: true }
+    );
     
-    res.json({ message: "Quiz count updated successfully", course });
+    res.json({ message: "Quiz count updated successfully", course: updatedCourse });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Failed to update quiz count" });
   }
 };
 
@@ -157,8 +206,13 @@ export const updateAssignmentCount = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
     
+    // Check if professorId exists (data integrity check)
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
     // Check if the logged-in professor owns this course
-    if (course.professor.toString() !== req.user.id.toString()) {
+    if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to modify this course" });
     }
     
@@ -168,12 +222,15 @@ export const updateAssignmentCount = async (req, res) => {
       return res.status(400).json({ message: "Assignment count must be between 0 and 5" });
     }
     
-    course.assignmentCount = assignmentCount;
-    await course.save();
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.courseId,
+      { assignmentCount },
+      { new: true }
+    );
     
-    res.json({ message: "Assignment count updated successfully", course });
+    res.json({ message: "Assignment count updated successfully", course: updatedCourse });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Failed to update assignment count" });
   }
 };
 
@@ -186,8 +243,13 @@ export const updateMaxMarks = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
     
+    // Check if professorId exists (data integrity check)
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
     // Check if the logged-in professor owns this course
-    if (course.professor.toString() !== req.user.id.toString()) {
+    if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to modify this course" });
     }
     
@@ -200,26 +262,21 @@ export const updateMaxMarks = async (req, res) => {
       }
     }
     
-    // Initialize maxMarks if it doesn't exist
-    if (!course.maxMarks) {
-      course.maxMarks = {};
-    }
-    
-    // Update max marks - spread existing and new values
-    course.maxMarks = { 
-      ...course.maxMarks.toObject ? course.maxMarks.toObject() : course.maxMarks,
+    // Update max marks - merge existing and new values
+    const updatedMaxMarks = { 
+      ...course.maxMarks,
       ...maxMarks 
     };
     
-    // Mark the field as modified for Mongoose
-    course.markModified('maxMarks');
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.courseId,
+      { maxMarks: updatedMaxMarks },
+      { new: true }
+    );
     
-    await course.save();
-    
-    res.json({ message: "Max marks updated successfully", course });
+    res.json({ message: "Max marks updated successfully", course: updatedCourse });
   } catch (error) {
-    console.error("Error updating max marks:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Failed to update max marks" });
   }
 };
 
@@ -232,22 +289,138 @@ export const toggleLetterGradePublishing = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
     
+    // Check if professorId exists (data integrity check)
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
     // Check if the logged-in professor owns this course
-    if (course.professor.toString() !== req.user.id.toString()) {
+    if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to modify this course" });
     }
     
     // Toggle the publishing status
-    course.letterGradesPublished = !course.letterGradesPublished;
-    await course.save();
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.courseId,
+      { letterGradesPublished: !course.letterGradesPublished },
+      { new: true }
+    );
     
     res.json({ 
-      message: `Letter grades ${course.letterGradesPublished ? 'published' : 'unpublished'} successfully`, 
-      letterGradesPublished: course.letterGradesPublished,
-      course 
+      message: `Letter grades ${updatedCourse.letterGradesPublished ? 'published' : 'unpublished'} successfully`, 
+      letterGradesPublished: updatedCourse.letterGradesPublished,
+      course: updatedCourse 
     });
   } catch (error) {
-    console.error("Error toggling letter grade publishing:", error);
+    res.status(500).json({ message: "Failed to toggle letter grade publishing" });
+  }
+};
+
+// Remove a student from a course (professor only)
+export const removeStudentFromCourse = async (req, res) => {
+  try {
+    const { courseId, studentId } = req.params;
+    
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if professorId exists (data integrity check)
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
+    // Check if the logged-in professor owns this course
+    if (course.professorId !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to modify this course" });
+    }
+    
+    // Remove student from course
+    await Course.removeStudent(courseId, studentId);
+    await User.unenrollCourse(studentId, courseId);
+    
+    res.json({ message: "Student removed from course successfully" });
+  } catch (error) {
+    console.error("Error removing student from course:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Leave/delete a course (student/professor)
+export const leaveCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+    
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // If professor is leaving, they can only do so if no students are enrolled
+    if (req.user.role === 'professor') {
+      if (course.professorId !== userId) {
+        return res.status(403).json({ message: "Not authorized" });
+      }
+      
+      const students = await Course.getStudents(courseId);
+      if (students && students.length > 0) {
+        return res.status(400).json({ 
+          message: "Cannot delete course with enrolled students. Remove all students first." 
+        });
+      }
+      
+      // Delete the course
+      await Course.findByIdAndDelete(courseId);
+      res.json({ message: "Course deleted successfully" });
+    } else {
+      // Student leaving the course
+      await Course.removeStudent(courseId, userId);
+      await User.unenrollCourse(userId, courseId);
+      res.json({ message: "Successfully left the course" });
+    }
+  } catch (error) {
+    console.error("Error leaving course:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update grading scale for a course (professor only)
+export const updateGradingScale = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { gradingScale } = req.body;
+    
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if professorId exists (data integrity check)
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
+    // Check if the logged-in professor owns this course
+    if (course.professorId !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to modify this course" });
+    }
+    
+    // Validate grading scale format
+    if (!gradingScale || typeof gradingScale !== 'object') {
+      return res.status(400).json({ message: "Invalid grading scale format" });
+    }
+    
+    // Update the grading scale
+    const updatedCourse = await Course.updateGradingScale(courseId, gradingScale);
+    
+    res.json({ 
+      message: "Grading scale updated successfully",
+      course: updatedCourse
+    });
+  } catch (error) {
+    console.error("Error updating grading scale:", error);
     res.status(500).json({ message: error.message });
   }
 };

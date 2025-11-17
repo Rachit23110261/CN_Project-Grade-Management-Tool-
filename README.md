@@ -57,12 +57,37 @@ A full-stack web application for managing student grades, courses, and academic 
 - **Student & Professor Lists**: View and manage all users in the system
 - **Download Sample CSV**: Get template for bulk user registration
 
-### 🔐 Authentication & Security
-- JWT-based authentication with 7-day token expiration
-- Bcrypt password hashing
-- Protected routes with role-based access control
-- Forgot password with email recovery
-- Change password functionality
+### 🔐 Authentication & Security (v2.2 - Hardened)
+- **JWT Security**: 
+  - JWT secret validation at server startup (32+ chars required)
+  - 7-day token expiration
+- **Password Security**:
+  - Bcrypt password hashing
+  - Strong password policy (8+ chars, uppercase, lowercase, number, special char)
+- **Rate Limiting**:
+  - Login: 5 attempts / 15 minutes
+  - Password reset: 3 attempts / hour
+  - Grade updates: 30 attempts / 5 minutes
+  - General API: 100 requests / 15 minutes
+- **Input Validation**:
+  - 30+ validation rules with XSS protection
+  - SQL injection prevention via parameterized queries
+  - Email validation and sanitization
+- **Authorization**:
+  - Protected routes with role-based access control
+  - Resource ownership verification
+  - Cascade delete protection
+  - Enrollment verification for grade access
+- **Data Integrity**:
+  - Division by zero prevention in grade calculations
+  - Policy percentage validation (must sum to 100%)
+  - Max marks enforcement (prevents 150/100 scores)
+  - Negative marks rejection
+- **Password Recovery**:
+  - Forgot password with email recovery
+  - Change password functionality
+  
+📚 **See `server/COMPLETE_IMPLEMENTATION_SUMMARY.md` for full security documentation**
 
 ### 📧 Email Features
 - **Welcome Emails**: Automatic emails sent to newly registered users with credentials

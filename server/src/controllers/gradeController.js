@@ -6,17 +6,27 @@ export const getCourseGrades = async (req, res) => {
   const { courseId } = req.params;
 
   try {
-    console.log("good fuck")
-    const course = await Course.findById(courseId).populate("students", "name email");
+    let course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: "Course not found" });
+    
+    // SECURITY: Verify professor owns this course
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
+    if (course.professorId !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to view grades for this course" });
+    }
+
+    // Populate students
+    course = await Course.populate(course, ['students']);
 
     // Fetch grades for enrolled students
     const grades = await Grade.find({ course: courseId });
-    console.log("grades", grades)
 
     // Merge students with grades
     const studentGrades = course.students.map(student => {
-      const g = grades.find(grade => grade.student.toString() === student._id.toString());
+      const g = grades.find(grade => grade.studentId == student.id);
       // Create a new object for each student to avoid shared references
       const marks = g ? {
         midsem: g.marks.midsem || 0,
@@ -67,7 +77,7 @@ export const getCourseGrades = async (req, res) => {
       };
       
       return {
-        _id: student._id,
+        _id: student.id,
         name: student.name,
         marks: marks
       };
@@ -84,12 +94,53 @@ export const updateCourseGrades = async (req, res) => {
   const { grades } = req.body;
 
   try {
-    console.log("Controller triggered for course:", courseId);
-    console.log("Grades payload:", grades);
-
+    // SECURITY: Verify professor owns this course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    if (!course.professorId) {
+      return res.status(500).json({ message: "Course data corrupted: missing professor information" });
+    }
+    
+    if (course.professorId !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to update grades for this course" });
+    }
+    
+    // SECURITY: Verify all students are enrolled in this course
+    const enrolledStudents = await Course.getStudents(courseId);
+    const enrolledStudentIds = enrolledStudents.map(s => s.id.toString());
+    
+    // Get course max marks for validation
+    const maxMarks = course.maxMarks || {};
+    
     for (const studentId in grades) {
-      console.log(`Updating student ${studentId} ...`);
-
+      if (!enrolledStudentIds.includes(studentId.toString())) {
+        return res.status(403).json({ 
+          message: `Cannot update grades: Student ${studentId} is not enrolled in this course` 
+        });
+      }
+      
+      // DATA INTEGRITY: Validate that all marks don't exceed maxMarks
+      const studentMarks = grades[studentId];
+      for (const component in studentMarks) {
+        const enteredMark = studentMarks[component];
+        const maxMark = maxMarks[component] || 100; // Default to 100 if not specified
+        
+        if (enteredMark !== null && enteredMark !== undefined && enteredMark > maxMark) {
+          return res.status(400).json({ 
+            message: `Invalid marks: ${component} mark (${enteredMark}) exceeds maximum (${maxMark}) for student ${studentId}` 
+          });
+        }
+        
+        if (enteredMark !== null && enteredMark !== undefined && enteredMark < 0) {
+          return res.status(400).json({ 
+            message: `Invalid marks: ${component} mark (${enteredMark}) cannot be negative for student ${studentId}` 
+          });
+        }
+      }
+      
       const updatedGrade = await Grade.findOneAndUpdate(
         { course: courseId, student: studentId },
         { marks: grades[studentId] },
@@ -101,24 +152,30 @@ export const updateCourseGrades = async (req, res) => {
 
     res.json({ message: "Grades updated successfully" });
   } catch (err) {
-    console.error("Error updating grades:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to update grades" });
   }
 };
 
   export const getStudentGrades = async (req, res) => {
-    const studentId = req.user._id; // from verifyToken middleware
+    const studentId = req.user.id; // from verifyToken middleware
     const { courseId } = req.params;
   
     try {
-      console.log(`Fetching grades for student ${studentId} in course ${courseId}`);
-      
-      const grade = await Grade.findOne({ student: studentId, course: courseId });
       const course = await Course.findById(courseId);
   
       if (!course) return res.status(404).json({ message: "Course not found" });
-
-      console.log("Found grade:", grade);
+      
+      // SECURITY: Verify student is enrolled in this course
+      const User = (await import('../models/userModel.js')).default;
+      const enrolledCourses = await User.getEnrolledCourses(studentId);
+      
+      if (!enrolledCourses.includes(courseId)) {
+        return res.status(403).json({ 
+          message: "Access denied: You are not enrolled in this course" 
+        });
+      }
+      
+      const grade = await Grade.findOne({ student: studentId, course: courseId });
 
       // Calculate letter grade if published
       let letterGrade = null;
@@ -194,18 +251,57 @@ export const updateCourseGrades = async (req, res) => {
         const variance = allWeightedScores.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allWeightedScores.length;
         const stdDev = Math.sqrt(variance);
 
-        // Calculate letter grade based on z-score
+        // Calculate letter grade based on z-score using course's grading scale
         if (stdDev > 0) {
           const zScore = (weightedScore - mean) / stdDev;
-          if (zScore >= 1.5) letterGrade = "A+";
-          else if (zScore >= 1.0) letterGrade = "A";
-          else if (zScore >= 0.5) letterGrade = "A-";
-          else if (zScore >= 0.0) letterGrade = "B";
-          else if (zScore >= -0.5) letterGrade = "C";
-          else if (zScore >= -1.0) letterGrade = "D";
-          else if (zScore >= -1.5) letterGrade = "E";
-          else if (zScore >= -2.0) letterGrade = "F";
-          else letterGrade = "FAIL";
+          
+          // Use course's custom grading scale if available
+          const gradingScale = course.gradingScale || {
+            "A+": 1.5,
+            "A": 1.0,
+            "A-": 0.5,
+            "B": 0.0,
+            "C": -0.5,
+            "D": -1.0,
+            "E": -1.5,
+            "F": -2.0
+          };
+          
+          // Sort grades by threshold descending to find the appropriate grade
+          const sortedGrades = Object.entries(gradingScale)
+            .sort((a, b) => b[1] - a[1]);
+          
+          letterGrade = "FAIL"; // Default
+          for (const [grade, threshold] of sortedGrades) {
+            if (zScore >= threshold) {
+              letterGrade = grade;
+              break;
+            }
+          }
+        } else {
+          // Edge case: All students have the same weighted score (stdDev = 0)
+          // Assign grade based on absolute performance
+          const gradingScale = course.gradingScale || {
+            "A+": 1.5,
+            "A": 1.0,
+            "A-": 0.5,
+            "B": 0.0,
+            "C": -0.5,
+            "D": -1.0,
+            "E": -1.5,
+            "F": -2.0
+          };
+          
+          // When everyone performs equally, assign grade based on mean score percentage
+          // 90-100%: A+, 80-90%: A, 70-80%: A-, 60-70%: B, 50-60%: C, 40-50%: D, 30-40%: E, <30%: F
+          if (mean >= 90) letterGrade = "A+";
+          else if (mean >= 80) letterGrade = "A";
+          else if (mean >= 70) letterGrade = "A-";
+          else if (mean >= 60) letterGrade = "B";
+          else if (mean >= 50) letterGrade = "C";
+          else if (mean >= 40) letterGrade = "D";
+          else if (mean >= 30) letterGrade = "E";
+          else letterGrade = "F";
         }
       }
       
@@ -218,9 +314,10 @@ export const updateCourseGrades = async (req, res) => {
           assignmentCount: course.assignmentCount || 0,
           maxMarks: course.maxMarks || {},
           letterGradesPublished: course.letterGradesPublished || false,
+          gradingScale: course.gradingScale || {}
         },
         studentGrades: grade ? [{
-          _id: grade._id,
+          _id: grade.id,
           name: req.user.name,
           marks: grade.marks
         }] : [],
@@ -239,14 +336,17 @@ export const uploadGradesFromCSV = async (req, res) => {
   const { csvData } = req.body; // Array of objects from parsed CSV
 
   try {
-    const course = await Course.findById(courseId).populate("students", "name email");
+    let course = await Course.findById(courseId);
     
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
 
+    // Populate students
+    course = await Course.populate(course, ['students']);
+
     // Check if the logged-in professor owns this course
-    if (course.professor.toString() !== req.user.id.toString()) {
+    if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to update grades for this course" });
     }
 
@@ -328,7 +428,7 @@ export const uploadGradesFromCSV = async (req, res) => {
 
       // Update or create grade entry
       await Grade.findOneAndUpdate(
-        { course: courseId, student: student._id },
+        { course: courseId, student: student.id },
         { marks },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -354,21 +454,24 @@ export const getGradeById = async (req, res) => {
   const { gradeId } = req.params;
 
   try {
-    const grade = await Grade.findById(gradeId).populate('student', 'name email').populate('course', 'name');
+    let grade = await Grade.findById(gradeId);
     
     if (!grade) {
       return res.status(404).json({ message: "Grade not found" });
     }
 
+    // Populate student and course
+    grade = await Grade.populate(grade, ['student', 'course']);
+
     // Check if the user is authorized to view this grade
     // Student can view their own grade, professor can view any grade in their course
-    const userId = req.user._id.toString();
-    const isStudent = grade.student._id.toString() === userId;
+    const userId = req.user.id;
+    const isStudent = grade.student.id == userId;
     
     if (!isStudent) {
       // Check if user is the professor of the course
-      const course = await Course.findById(grade.course._id);
-      const isProfessor = course && course.professor.toString() === userId;
+      const course = await Course.findById(grade.courseId);
+      const isProfessor = course && course.professorId == userId;
       
       if (!isProfessor) {
         return res.status(403).json({ message: "Not authorized to view this grade" });
@@ -387,19 +490,29 @@ export const getCourseStatistics = async (req, res) => {
   const { courseId } = req.params;
 
   try {
-    const course = await Course.findById(courseId).populate("students", "name email");
+    let course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: "Course not found" });
 
+    // Populate students
+    course = await Course.populate(course, ['students']);
+
     // Check if professor owns this course
-    if (course.professor.toString() !== req.user.id.toString()) {
+    if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to view statistics for this course" });
     }
 
-    const grades = await Grade.find({ course: courseId }).populate("student", "name email");
+    let grades = await Grade.find({ course: courseId });
 
     if (grades.length === 0) {
       return res.status(404).json({ message: "No grades found for this course" });
     }
+
+    // Populate student info for each grade
+    grades = await Promise.all(
+      grades.map(async (grade) => {
+        return await Grade.populate(grade, ['student']);
+      })
+    );
 
     const policy = course.policy;
     const quizCount = course.quizCount || 0;

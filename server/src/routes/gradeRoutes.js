@@ -1,6 +1,8 @@
 import express from "express";
 import { getCourseGrades, updateCourseGrades, getStudentGrades, uploadGradesFromCSV, getGradeById, getCourseStatistics } from "../controllers/gradeController.js";
 import { verifyToken, isProfessor, isStudent } from "../middleware/authMiddleware.js";
+import { validateGrades, validateCourseId } from "../middleware/validationMiddleware.js";
+import { gradeUpdateLimiter } from "../middleware/rateLimiter.js";
 
 const router = express.Router();
 
@@ -8,14 +10,14 @@ const router = express.Router();
 router.get("/grade/:gradeId", verifyToken, getGradeById);
 
 // Get statistics for a course - must come before generic /:courseId
-router.get("/:courseId/statistics", verifyToken, isProfessor, getCourseStatistics);
+router.get("/:courseId/statistics", verifyToken, isProfessor, validateCourseId, getCourseStatistics);
 
 // Student route - get their own grades for a course
-router.get("/student/:courseId", verifyToken, isStudent, getStudentGrades);
+router.get("/student/:courseId", verifyToken, isStudent, validateCourseId, getStudentGrades);
 
 // Professor routes - get all students' grades and update them
-router.get("/:courseId", verifyToken, isProfessor, getCourseGrades);
-router.post("/:courseId", verifyToken, isProfessor, updateCourseGrades);
-router.post("/:courseId/upload-csv", verifyToken, isProfessor, uploadGradesFromCSV);
+router.get("/:courseId", verifyToken, isProfessor, validateCourseId, getCourseGrades);
+router.post("/:courseId", verifyToken, isProfessor, gradeUpdateLimiter, validateCourseId, validateGrades, updateCourseGrades);
+router.post("/:courseId/upload-csv", verifyToken, isProfessor, gradeUpdateLimiter, validateCourseId, uploadGradesFromCSV);
 
 export default router;

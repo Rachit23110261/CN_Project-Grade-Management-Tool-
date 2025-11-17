@@ -1,12 +1,14 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import StudentCourses from "./pages/StudentCourses";
 import ProfessorCourses from "./pages/ProffessorCourses";
 import CreateCourse from "./pages/CreateCourse";
 import EditCourse from "./pages/EditCourse";
 import AdminPanel from "./pages/AdminPanel";
 import AdminRegister from "./pages/AdminRegister";
+import PendingRegistrations from "./pages/PendingRegistrations";
 import ProtectedRoute from "./components/ProtectedRoute";
 import StudentsList from "./pages/StudentsList";
 import ProfessorsList from "./pages/ProffessorList";
@@ -27,6 +29,7 @@ export default function App() {
 
           {/* ---------- Public ---------- */}
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
           {/* ---------- Student ---------- */}
           <Route
@@ -81,6 +84,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminRegister />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/registrations"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <PendingRegistrations />
               </ProtectedRoute>
             }
           />
