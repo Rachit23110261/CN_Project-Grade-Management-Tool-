@@ -54,18 +54,53 @@ const pool = new Pool({
   ...poolConfig,
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000, // Increased to 10 seconds
+  acquireTimeoutMillis: 60000, // Time to wait for connection from pool
+  createTimeoutMillis: 30000, // Time to wait for new connection to be created
+  destroyTimeoutMillis: 5000,
+  reapIntervalMillis: 1000,
+  createRetryIntervalMillis: 200,
 });
 
 // Test connection
 const connectDB = async () => {
   try {
+    console.log("🔗 Attempting to connect to PostgreSQL...");
+    console.log("📍 Connection config:", {
+      host: poolConfig.host,
+      port: poolConfig.port,
+      database: poolConfig.database,
+      user: poolConfig.user,
+      password: poolConfig.password ? '***' : 'NOT SET'
+    });
+    
     const client = await pool.connect();
-    console.log(`✅ PostgreSQL Connected: ${client.host || 'localhost'}:${client.port || 5432}`);
+    console.log(`✅ PostgreSQL Connected: ${client.database}@${client.host || 'localhost'}:${client.port || 5432}`);
+    
+    // Test a simple query
+    const result = await client.query('SELECT NOW() as current_time');
+    console.log(`🕐 Database time: ${result.rows[0].current_time}`);
+    
     client.release();
   } catch (error) {
     console.error("❌ PostgreSQL connection failed:", error.message);
-    process.exit(1);
+    console.error("🔍 Error details:", {
+      code: error.code,
+      errno: error.errno,
+      syscall: error.syscall,
+      hostname: error.hostname,
+      port: error.port
+    });
+    
+    // Don't exit immediately, give suggestions
+    console.log("\n🔧 Troubleshooting suggestions:");
+    console.log("1. Check if PostgreSQL service is running");
+    console.log("2. Verify database 'grademanagement' exists");
+    console.log("3. Check username/password in .env file");
+    console.log("4. Ensure pg_hba.conf allows local connections");
+    console.log("5. Try connecting with psql: psql -U postgres -d grademanagement\n");
+    
+    throw error; // Re-throw to let server decide whether to exit
   }
 };
 

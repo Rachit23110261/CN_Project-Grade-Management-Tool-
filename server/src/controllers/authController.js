@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User, { enhanceUser } from "../models/userModel.js";
+import PendingRegistration from "../models/PendingRegistration.js";
 import { sendPasswordResetEmail, sendWelcomeEmail } from "../services/emailService.js";
 import crypto from "crypto";
 
@@ -20,18 +21,57 @@ const generateRandomPassword = () => {
 // @desc Register user (Admin can create any role)
 export const registerUser = async (req, res, next) => {
   try {
+    console.log("🔍 Admin registration attempt:");
+    console.log("- Admin user:", req.user ? `${req.user.name} (${req.user.role})` : 'undefined');
+    console.log("- Request body:", { ...req.body, password: '***' });
+    
     const { name, email, password, role } = req.body;
 
-    const userExists = await User.findOne({ email });
-    if (userExists) return res.status(400).json({ message: "User already exists" });
+    // Additional validation beyond middleware
+    if (!name || !email || !password) {
+      console.log("❌ Missing required fields");
+      return res.status(400).json({ message: "Name, email, and password are required" });
+    }
 
-    const user = await User.create({ name, email, password, role });
+    if (!role || !["student", "professor", "admin"].includes(role)) {
+      console.log("❌ Invalid role:", role);
+      return res.status(400).json({ message: "Invalid role specified" });
+    }
+
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      console.log("❌ User already exists:", email);
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    // Check for and clean up any existing pending registration
+    try {
+      const pendingRegistration = await PendingRegistration.findOne({ email });
+      if (pendingRegistration) {
+        await PendingRegistration.deleteById(pendingRegistration.id);
+        console.log("✅ Cleaned up existing pending registration for:", email);
+      }
+    } catch (cleanupError) {
+      console.error("⚠️ Failed to cleanup pending registration:", cleanupError.message);
+      // Continue with registration even if cleanup fails
+    }
+
+    console.log("✅ Creating user...");
+    const user = await User.create({ 
+      name: name.trim(), 
+      email: email.toLowerCase().trim(), 
+      password, 
+      role 
+    });
+    
+    console.log("✅ User created successfully:", { id: user.id, name: user.name, email: user.email, role: user.role });
     
     // Send welcome email with credentials
     try {
-      await sendWelcomeEmail(email, password, role);
+      await sendWelcomeEmail(email, email, password, role); // Using email as username
+      console.log("✅ Welcome email sent");
     } catch (emailErr) {
-      console.error("Failed to send welcome email:", emailError);
+      console.error("❌ Failed to send welcome email:", emailErr.message);
       // Don't fail registration if email fails
     }
     
@@ -40,6 +80,7 @@ export const registerUser = async (req, res, next) => {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
     });
   } catch (err) {
+    console.error("❌ Error in registerUser:", err.message);
     next(err);
   }
 };

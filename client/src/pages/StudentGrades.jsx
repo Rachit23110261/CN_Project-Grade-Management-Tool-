@@ -67,7 +67,7 @@ export default function StudentGrades() {
     }
   }, [courseId]);
 
-  // Filter assessments to only show those with policy > 0 AND score > 0
+  // Filter assessments to only show those with policy > 0 AND marks have been entered (including 0)
   const getVisibleAssessments = () => {
     if (!grades || !coursePolicy) return [];
     const visible = [];
@@ -81,19 +81,22 @@ export default function StudentGrades() {
       // Handle individual quiz grades
       if (key.startsWith('quiz')) {
         const quizNum = parseInt(key.replace('quiz', ''));
-        if (quizNum <= quizCount && score > 0) {
+        // Show if quiz number is within range and score exists (including 0)
+        if (quizNum <= quizCount && typeof value === 'number') {
           visible.push([key, value]);
         }
       } else if (key.startsWith('assignment')) {
         // Handle individual assignment grades
         const assignmentNum = parseInt(key.replace('assignment', ''));
-        if (assignmentNum <= assignmentCount && score > 0) {
+        // Show if assignment number is within range and score exists (including 0)
+        if (assignmentNum <= assignmentCount && typeof value === 'number') {
           visible.push([key, value]);
         }
       } else {
         // Handle other assessments
         const policyWeight = coursePolicy[key] || 0;
-        if (policyWeight > 0 && score > 0) {
+        // Show if policy weight > 0 and score exists (including 0)
+        if (policyWeight > 0 && typeof value === 'number') {
           visible.push([key, value]);
         }
       }
@@ -136,7 +139,8 @@ export default function StudentGrades() {
 
   const calculateAverage = (gradesObj) => {
     if (!gradesObj) return 0;
-    const values = Object.values(gradesObj).filter(v => typeof v === 'number' && v > 0);
+    // Include all numeric values (including 0) that have been entered
+    const values = Object.values(gradesObj).filter(v => typeof v === 'number');
     if (values.length === 0) return 0;
     return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2);
   };
@@ -314,7 +318,7 @@ export default function StudentGrades() {
                     <div className="space-y-4">
                       {visibleAssessments.map(([key, value], index) => {
                         const score = typeof value === 'number' ? value : 0;
-                        const displayValue = score === 0 ? "-" : value;
+                        const displayValue = typeof value === 'number' ? value : "-";
                         
                         // Calculate weight for this assessment
                         let policyWeight;
@@ -365,19 +369,17 @@ export default function StudentGrades() {
                               
                               <div className="flex items-center space-x-4">
                                 <span className="text-3xl font-bold text-gray-900">{displayValue}</span>
-                                {score > 0 && <span className="text-gray-500 text-sm">/{max}</span>}
+                                {typeof value === 'number' && <span className="text-gray-500 text-sm">/{max}</span>}
                               </div>
                             </div>
                             
                             {/* Progress Bar */}
-                            {score > 0 && (
-                              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                <div 
-                                  className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500"
-                                  style={{ width: `${Math.min((score / max) * 100, 100)}%` }}
-                                ></div>
-                              </div>
-                            )}
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                              <div 
+                                className="bg-gradient-to-r from-indigo-500 to-purple-600 h-2.5 rounded-full transition-all duration-500"
+                                style={{ width: `${Math.min((score / max) * 100, 100)}%` }}
+                              ></div>
+                            </div>
                           </div>
                         );
                       })}

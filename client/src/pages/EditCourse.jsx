@@ -55,6 +55,16 @@ export default function EditCourse() {
         return alert("Total course policy percentages must add up to 100");
       }
 
+      // Validate quiz count if quizzes have non-zero percentage
+      if (form.policy.quizzes > 0 && quizCount === 0) {
+        return alert("Quiz count must be greater than 0 when quizzes have a non-zero percentage. Please add quizzes first.");
+      }
+
+      // Validate assignment count if assignments have non-zero percentage
+      if (form.policy.assignment > 0 && assignmentCount === 0) {
+        return alert("Assignment count must be greater than 0 when assignments have a non-zero percentage. Please add assignments first.");
+      }
+
       await api.put(`/courses/${courseId}`, form);
       alert("Course updated successfully!");
       navigate("/professor/courses");

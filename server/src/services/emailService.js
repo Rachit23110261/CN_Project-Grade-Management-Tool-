@@ -183,7 +183,7 @@ export const sendWelcomeEmail = async (to, username, password, role) => {
             <p style="margin: 0 0 10px 0;"><strong>Your Login Credentials:</strong></p>
             <p style="margin: 5px 0;"><strong>Username:</strong> ${username}</p>
             <p style="margin: 5px 0;"><strong>Password:</strong> <code style="background-color: #e5e7eb; padding: 4px 8px; border-radius: 3px; font-size: 16px; font-family: monospace;">${password}</code></p>
-            <p style="margin: 5px 0;"><strong>Role:</strong> ${role.charAt(0).toUpperCase() + role.slice(1)}</p>
+            <p style="margin: 5px 0;"><strong>Role:</strong> ${role ? role.charAt(0).toUpperCase() + role.slice(1) : 'User'}</p>
           </div>
           
           <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">

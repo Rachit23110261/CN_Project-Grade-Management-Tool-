@@ -1,4 +1,5 @@
 import User from "../models/userModel.js";
+import PendingRegistration from "../models/PendingRegistration.js";
 import { sendWelcomeEmail } from "../services/emailService.js";
 import crypto from "crypto";
 
@@ -62,6 +63,27 @@ export const bulkRegisterUsers = async (req, res) => {
           continue;
         }
 
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          results.failed.push({
+            email,
+            name,
+            reason: "Invalid email format"
+          });
+          continue;
+        }
+
+        // Validate name
+        if (name.length < 2 || name.length > 100) {
+          results.failed.push({
+            email,
+            name,
+            reason: "Name must be between 2 and 100 characters"
+          });
+          continue;
+        }
+
         // Check if user already exists
         const userExists = await User.findOne({ email });
         if (userExists) {
@@ -77,13 +99,13 @@ export const bulkRegisterUsers = async (req, res) => {
         const password = generateRandomPassword();
 
         // Create user
-        const user = await User.create({ name, email, password, role });
+        const user = await User.create({ name: name.trim(), email: email.toLowerCase().trim(), password, role });
 
         // Send welcome email
         try {
-          await sendWelcomeEmail(email, password, role);
+          await sendWelcomeEmail(email, email, password, role); // Using email as username
         } catch (emailErr) {
-          console.error(`Failed to send welcome email to ${email}:`, emailError);
+          console.error(`Failed to send welcome email to ${email}:`, emailErr);
           // Continue even if email fails
         }
 
@@ -95,10 +117,11 @@ export const bulkRegisterUsers = async (req, res) => {
         });
 
       } catch (error) {
+        console.error(`Error processing user ${userData.email || 'unknown'}:`, error);
         results.failed.push({
           email: userData.email || "unknown",
           name: userData.name || "unknown",
-          reason: error.message
+          reason: error.message || "Database error"
         });
       }
     }
@@ -132,6 +155,8 @@ export const deleteUser = async (req, res) => {
     if (user.role === 'admin') {
       return res.status(403).json({ message: "Cannot delete admin accounts" });
     }
+    
+    console.log("🗑️ Deleting user:", { id: userId, email: user.email, role: user.role });
     
     // If professor, implement cascade delete with proper checks
     if (user.role === 'professor') {
@@ -194,13 +219,28 @@ export const deleteUser = async (req, res) => {
       }
     }
     
+    // Clean up pending registration records for this email
+    try {
+      const pendingRegistration = await PendingRegistration.findOne({ email: user.email });
+      if (pendingRegistration) {
+        await PendingRegistration.deleteById(pendingRegistration.id);
+        console.log("✅ Cleaned up pending registration for email:", user.email);
+      }
+    } catch (cleanupError) {
+      console.error("⚠️ Failed to cleanup pending registration:", cleanupError.message);
+      // Don't fail the deletion if this cleanup fails
+    }
+    
     // Delete the user
     await User.findByIdAndDelete(userId);
+    
+    console.log("✅ User deleted successfully");
     
     res.json({ 
       message: `${user.role === 'professor' ? 'Professor' : 'Student'} account and associated data deleted successfully`
     });
   } catch (error) {
+    console.error("❌ Failed to delete user:", error);
     res.status(500).json({ message: "Failed to delete user" });
   }
 };

@@ -18,15 +18,27 @@ export const getCourseGrades = async (req, res) => {
       return res.status(403).json({ message: "Not authorized to view grades for this course" });
     }
 
-    // Populate students
+    // Get students enrolled in this course
     course = await Course.populate(course, ['students']);
 
     // Fetch grades for enrolled students
     const grades = await Grade.find({ course: courseId });
 
+    console.log(`=== RETRIEVING GRADES FOR COURSE ${courseId} ===`);
+    console.log(`Found ${grades.length} grade records`);
+    grades.forEach((grade, index) => {
+      console.log(`Grade ${index + 1}:`, {
+        id: grade.id,
+        student: grade.student,
+        marks: Object.entries(grade.marks).filter(([key, value]) => value > 0)
+      });
+    });
+    console.log(`Course has ${course.students.length} enrolled students`);
+
     // Merge students with grades
     const studentGrades = course.students.map(student => {
-      const g = grades.find(grade => grade.studentId == student.id);
+      const g = grades.find(grade => grade.student && grade.student.id == student.id);
+      console.log(`Student ${student.id} (${student.name}): ${g ? 'Found grades' : 'No grades found'}`);
       // Create a new object for each student to avoid shared references
       const marks = g ? {
         midsem: g.marks.midsem || 0,
@@ -79,6 +91,7 @@ export const getCourseGrades = async (req, res) => {
       return {
         _id: student.id,
         name: student.name,
+        email: student.email || '',
         marks: marks
       };
     });
@@ -93,12 +106,19 @@ export const updateCourseGrades = async (req, res) => {
   const { courseId } = req.params;
   const { grades } = req.body;
 
+  console.log("=== UPDATE COURSE GRADES ===");
+  console.log("Course ID:", courseId);
+  console.log("Grades to save:", JSON.stringify(grades, null, 2));
+
   try {
     // SECURITY: Verify professor owns this course
     const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
     }
+    
+    console.log("Professor ID from course:", course.professorId);
+    console.log("User ID from token:", req.user.id);
     
     if (!course.professorId) {
       return res.status(500).json({ message: "Course data corrupted: missing professor information" });
@@ -112,11 +132,17 @@ export const updateCourseGrades = async (req, res) => {
     const enrolledStudents = await Course.getStudents(courseId);
     const enrolledStudentIds = enrolledStudents.map(s => s.id.toString());
     
+    console.log("Enrolled students:", enrolledStudents.map(s => ({ id: s.id, name: s.name })));
+    console.log("Enrolled student IDs (as strings):", enrolledStudentIds);
+    console.log("Grade student IDs:", Object.keys(grades));
+    
     // Get course max marks for validation
     const maxMarks = course.maxMarks || {};
     
     for (const studentId in grades) {
+      console.log(`Checking student ${studentId} (type: ${typeof studentId})`);
       if (!enrolledStudentIds.includes(studentId.toString())) {
+        console.log(`Student ${studentId} not found in enrolled list`);
         return res.status(403).json({ 
           message: `Cannot update grades: Student ${studentId} is not enrolled in this course` 
         });
@@ -141,18 +167,30 @@ export const updateCourseGrades = async (req, res) => {
         }
       }
       
+      console.log(`Saving grades for student ${studentId}:`, grades[studentId]);
+      
       const updatedGrade = await Grade.findOneAndUpdate(
         { course: courseId, student: studentId },
         { marks: grades[studentId] },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
+      console.log("Saved grade result:", updatedGrade);
+
+      if (!updatedGrade) {
+        console.error(`Failed to update grade for student ${studentId} in course ${courseId}`);
+        return res.status(500).json({ 
+          message: `Failed to update grades for student ${studentId}` 
+        });
+      }
+
       console.log("Updated grade doc:", updatedGrade);
     }
 
     res.json({ message: "Grades updated successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Failed to update grades" });
+    console.error("Error in updateCourseGrades:", err);
+    res.status(500).json({ message: "Failed to update grades", error: err.message });
   }
 };
 
@@ -169,7 +207,17 @@ export const updateCourseGrades = async (req, res) => {
       const User = (await import('../models/userModel.js')).default;
       const enrolledCourses = await User.getEnrolledCourses(studentId);
       
-      if (!enrolledCourses.includes(courseId)) {
+      console.log(`Debug - Student ${studentId} checking enrollment in course ${courseId}`);
+      console.log(`Debug - Enrolled courses:`, enrolledCourses);
+      console.log(`Debug - Course ID type:`, typeof courseId);
+      console.log(`Debug - Enrolled course types:`, enrolledCourses.map(id => typeof id));
+      
+      // Convert courseId to number for comparison since DB returns numbers
+      const courseIdNum = parseInt(courseId);
+      const enrolledCourseIds = enrolledCourses.map(id => parseInt(id));
+      
+      if (!enrolledCourseIds.includes(courseIdNum)) {
+        console.log(`Access denied - Student ${studentId} not enrolled in course ${courseId}`);
         return res.status(403).json({ 
           message: "Access denied: You are not enrolled in this course" 
         });
@@ -180,128 +228,141 @@ export const updateCourseGrades = async (req, res) => {
       // Calculate letter grade if published
       let letterGrade = null;
       if (course.letterGradesPublished && grade) {
-        // Calculate weighted score for this student
-        const policy = course.policy;
-        const quizCount = course.quizCount || 0;
-        const assignmentCount = course.assignmentCount || 0;
-        const maxMarks = course.maxMarks || {};
-        let weightedScore = 0;
-        const marks = grade.marks;
+        try {
+          // Calculate weighted score for this student
+          const policy = course.policy || {};
+          const quizCount = course.quizCount || 0;
+          const assignmentCount = course.assignmentCount || 0;
+          const maxMarks = course.maxMarks || {};
+          let weightedScore = 0;
+          const marks = grade.marks || {};
 
-        Object.keys(policy).forEach(key => {
-          if (policy[key] > 0) {
-            if (key === 'quizzes' && quizCount > 0) {
-              for (let i = 1; i <= quizCount; i++) {
-                const quizKey = `quiz${i}`;
-                const score = marks[quizKey] || 0;
-                const max = maxMarks[quizKey] || 100;
-                const weight = policy.quizzes / quizCount;
-                weightedScore += (score / max) * weight;
-              }
-            } else if (key === 'assignment' && assignmentCount > 0) {
-              for (let i = 1; i <= assignmentCount; i++) {
-                const assignmentKey = `assignment${i}`;
-                const score = marks[assignmentKey] || 0;
-                const max = maxMarks[assignmentKey] || 100;
-                const weight = policy.assignment / assignmentCount;
-                weightedScore += (score / max) * weight;
-              }
-            } else if (key !== 'quizzes' && key !== 'assignment') {
-              const score = marks[key] || 0;
-              const max = maxMarks[key] || 100;
-              weightedScore += (score / max) * policy[key];
-            }
-          }
-        });
-
-        // Calculate overall statistics for all students
-        const allGrades = await Grade.find({ course: courseId });
-        const allWeightedScores = allGrades.map(g => {
-          let ws = 0;
-          const m = g.marks;
           Object.keys(policy).forEach(key => {
             if (policy[key] > 0) {
               if (key === 'quizzes' && quizCount > 0) {
                 for (let i = 1; i <= quizCount; i++) {
                   const quizKey = `quiz${i}`;
-                  const score = m[quizKey] || 0;
+                  const score = marks[quizKey] || 0;
                   const max = maxMarks[quizKey] || 100;
                   const weight = policy.quizzes / quizCount;
-                  ws += (score / max) * weight;
+                  weightedScore += (score / max) * weight;
                 }
               } else if (key === 'assignment' && assignmentCount > 0) {
                 for (let i = 1; i <= assignmentCount; i++) {
                   const assignmentKey = `assignment${i}`;
-                  const score = m[assignmentKey] || 0;
+                  const score = marks[assignmentKey] || 0;
                   const max = maxMarks[assignmentKey] || 100;
                   const weight = policy.assignment / assignmentCount;
-                  ws += (score / max) * weight;
+                  weightedScore += (score / max) * weight;
                 }
               } else if (key !== 'quizzes' && key !== 'assignment') {
-                const score = m[key] || 0;
+                const score = marks[key] || 0;
                 const max = maxMarks[key] || 100;
-                ws += (score / max) * policy[key];
+                weightedScore += (score / max) * policy[key];
               }
             }
           });
-          return ws;
-        });
 
-        const mean = allWeightedScores.reduce((a, b) => a + b, 0) / allWeightedScores.length;
-        const variance = allWeightedScores.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allWeightedScores.length;
-        const stdDev = Math.sqrt(variance);
+          // Calculate overall statistics for all students
+          const allGrades = await Grade.find({ course: courseId });
+          if (allGrades && allGrades.length > 0) {
+            const allWeightedScores = allGrades.map(g => {
+              let ws = 0;
+              const m = g.marks || {};
+              Object.keys(policy).forEach(key => {
+                if (policy[key] > 0) {
+                  if (key === 'quizzes' && quizCount > 0) {
+                    for (let i = 1; i <= quizCount; i++) {
+                      const quizKey = `quiz${i}`;
+                      const score = m[quizKey] || 0;
+                      const max = maxMarks[quizKey] || 100;
+                      const weight = policy.quizzes / quizCount;
+                      ws += (score / max) * weight;
+                    }
+                  } else if (key === 'assignment' && assignmentCount > 0) {
+                    for (let i = 1; i <= assignmentCount; i++) {
+                      const assignmentKey = `assignment${i}`;
+                      const score = m[assignmentKey] || 0;
+                      const max = maxMarks[assignmentKey] || 100;
+                      const weight = policy.assignment / assignmentCount;
+                      ws += (score / max) * weight;
+                    }
+                  } else if (key !== 'quizzes' && key !== 'assignment') {
+                    const score = m[key] || 0;
+                    const max = maxMarks[key] || 100;
+                    ws += (score / max) * policy[key];
+                  }
+                }
+              });
+              return ws;
+            });
 
-        // Calculate letter grade based on z-score using course's grading scale
-        if (stdDev > 0) {
-          const zScore = (weightedScore - mean) / stdDev;
-          
-          // Use course's custom grading scale if available
-          const gradingScale = course.gradingScale || {
-            "A+": 1.5,
-            "A": 1.0,
-            "A-": 0.5,
-            "B": 0.0,
-            "C": -0.5,
-            "D": -1.0,
-            "E": -1.5,
-            "F": -2.0
-          };
-          
-          // Sort grades by threshold descending to find the appropriate grade
-          const sortedGrades = Object.entries(gradingScale)
-            .sort((a, b) => b[1] - a[1]);
-          
-          letterGrade = "FAIL"; // Default
-          for (const [grade, threshold] of sortedGrades) {
-            if (zScore >= threshold) {
-              letterGrade = grade;
-              break;
+            // Calculate letter grade based on percentage using course's grading scale
+            const gradingScale = course.gradingScale;
+            
+            if (gradingScale && course.letterGradesPublished) {
+              // Use new percentage-based grading scale
+              const gradeEntries = Object.entries(gradingScale);
+              letterGrade = "F"; // Default
+              
+              // Check which grade range the weighted score falls into
+              for (const [gradeLabel, gradeData] of gradeEntries) {
+                if (typeof gradeData === 'object' && gradeData.min !== undefined && gradeData.max !== undefined) {
+                  // New percentage-based system
+                  if (weightedScore >= gradeData.min && weightedScore <= gradeData.max) {
+                    letterGrade = gradeLabel;
+                    break;
+                  }
+                }
+              }
+            } else if (gradingScale && typeof Object.values(gradingScale)[0] === 'number') {
+              // Legacy z-score system fallback
+              const mean = allWeightedScores.reduce((a, b) => a + b, 0) / allWeightedScores.length;
+              const variance = allWeightedScores.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allWeightedScores.length;
+              const stdDev = Math.sqrt(variance);
+              
+              if (stdDev > 0) {
+                const zScore = (weightedScore - mean) / stdDev;
+                
+                // Sort grades by threshold descending to find the appropriate grade
+                const sortedGrades = Object.entries(gradingScale)
+                  .sort((a, b) => b[1] - a[1]);
+                
+                letterGrade = "F"; // Default
+                for (const [gradeLabel, threshold] of sortedGrades) {
+                  if (zScore >= threshold) {
+                    letterGrade = gradeLabel;
+                    break;
+                  }
+                }
+              } else {
+                // Edge case: All students have the same weighted score (stdDev = 0)
+                // Assign grade based on absolute performance
+                if (weightedScore >= 90) letterGrade = "A+";
+                else if (weightedScore >= 80) letterGrade = "A";
+                else if (weightedScore >= 70) letterGrade = "A-";
+                else if (weightedScore >= 60) letterGrade = "B";
+                else if (weightedScore >= 50) letterGrade = "C";
+                else if (weightedScore >= 40) letterGrade = "D";
+                else if (weightedScore >= 30) letterGrade = "E";
+                else letterGrade = "F";
+              }
+            } else {
+              // Default percentage-based grading when no grading scale is defined
+              if (weightedScore >= 90) letterGrade = "A+";
+              else if (weightedScore >= 80) letterGrade = "A";
+              else if (weightedScore >= 70) letterGrade = "A-";
+              else if (weightedScore >= 60) letterGrade = "B";
+              else if (weightedScore >= 50) letterGrade = "C";
+              else if (weightedScore >= 40) letterGrade = "D";
+              else if (weightedScore >= 30) letterGrade = "E";
+              else letterGrade = "F";
             }
           }
-        } else {
-          // Edge case: All students have the same weighted score (stdDev = 0)
-          // Assign grade based on absolute performance
-          const gradingScale = course.gradingScale || {
-            "A+": 1.5,
-            "A": 1.0,
-            "A-": 0.5,
-            "B": 0.0,
-            "C": -0.5,
-            "D": -1.0,
-            "E": -1.5,
-            "F": -2.0
-          };
-          
-          // When everyone performs equally, assign grade based on mean score percentage
-          // 90-100%: A+, 80-90%: A, 70-80%: A-, 60-70%: B, 50-60%: C, 40-50%: D, 30-40%: E, <30%: F
-          if (mean >= 90) letterGrade = "A+";
-          else if (mean >= 80) letterGrade = "A";
-          else if (mean >= 70) letterGrade = "A-";
-          else if (mean >= 60) letterGrade = "B";
-          else if (mean >= 50) letterGrade = "C";
-          else if (mean >= 40) letterGrade = "D";
-          else if (mean >= 30) letterGrade = "E";
-          else letterGrade = "F";
+        } catch (letterGradeError) {
+          console.error("Error calculating letter grade:", letterGradeError);
+          // Continue without letter grade calculation
+          letterGrade = null;
         }
       }
       
@@ -309,7 +370,7 @@ export const updateCourseGrades = async (req, res) => {
         course: {
           name: course.name,
           code: course.code,
-          policy: course.policy,
+          policy: course.policy || {},
           quizCount: course.quizCount || 0,
           assignmentCount: course.assignmentCount || 0,
           maxMarks: course.maxMarks || {},
@@ -319,14 +380,15 @@ export const updateCourseGrades = async (req, res) => {
         studentGrades: grade ? [{
           _id: grade.id,
           name: req.user.name,
+          email: req.user.email || '',
           marks: grade.marks
         }] : [],
         marks: grade ? grade.marks : null,
         letterGrade: letterGrade,
       });
     } catch (err) {
-      console.log("Error fetching student grades:", err);
-      res.status(500).json({ message: err.message });
+      console.error("Error fetching student grades:", err);
+      res.status(500).json({ message: "Failed to fetch student grades", error: err.message });
     }
   };
 
@@ -342,13 +404,13 @@ export const uploadGradesFromCSV = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    // Populate students
-    course = await Course.populate(course, ['students']);
-
     // Check if the logged-in professor owns this course
     if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to update grades for this course" });
     }
+
+    // Get students enrolled in this course
+    course = await Course.populate(course, ['students']);
 
     let successCount = 0;
     let skippedCount = 0;
@@ -460,17 +522,15 @@ export const getGradeById = async (req, res) => {
       return res.status(404).json({ message: "Grade not found" });
     }
 
-    // Populate student and course
-    grade = await Grade.populate(grade, ['student', 'course']);
-
     // Check if the user is authorized to view this grade
     // Student can view their own grade, professor can view any grade in their course
     const userId = req.user.id;
-    const isStudent = grade.student.id == userId;
+    const isStudent = grade.studentId == userId;
     
     if (!isStudent) {
       // Check if user is the professor of the course
-      const course = await Course.findById(grade.courseId);
+      const Course = (await import('../models/Course.js')).default;
+      const course = await Course.findById(grade.course);
       const isProfessor = course && course.professorId == userId;
       
       if (!isProfessor) {
@@ -481,7 +541,7 @@ export const getGradeById = async (req, res) => {
     res.json(grade);
   } catch (err) {
     console.error("Error fetching grade by ID:", err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to fetch grade", error: err.message });
   }
 };
 
@@ -490,29 +550,19 @@ export const getCourseStatistics = async (req, res) => {
   const { courseId } = req.params;
 
   try {
-    let course = await Course.findById(courseId);
+    const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: "Course not found" });
-
-    // Populate students
-    course = await Course.populate(course, ['students']);
 
     // Check if professor owns this course
     if (course.professorId !== req.user.id) {
       return res.status(403).json({ message: "Not authorized to view statistics for this course" });
     }
 
-    let grades = await Grade.find({ course: courseId });
+    const grades = await Grade.find({ course: courseId });
 
     if (grades.length === 0) {
       return res.status(404).json({ message: "No grades found for this course" });
     }
-
-    // Populate student info for each grade
-    grades = await Promise.all(
-      grades.map(async (grade) => {
-        return await Grade.populate(grade, ['student']);
-      })
-    );
 
     const policy = course.policy;
     const quizCount = course.quizCount || 0;
@@ -634,4 +684,284 @@ export const getCourseStatistics = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// Get grade distribution for histogram display
+export const getGradeDistribution = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+    
+    // Check if user is professor of this course
+    if (course.professorId !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to view this course's grade distribution" });
+    }
+    
+    // Get all grades for this course
+    const grades = await Grade.find({ course: courseId });
+    
+    console.log(`=== PERCENTAGE-BASED GAUSSIAN GRADE DISTRIBUTION ===`);
+    console.log(`Found ${grades.length} grade records for course ${courseId}`);
+    
+    if (grades.length === 0) {
+      console.log("No grades found, returning empty distribution");
+      return res.json({
+        course: { name: course.name, code: course.code },
+        gradingScale: getDefaultGradingScale(),
+        distribution: [],
+        studentCounts: {},
+        students: [],
+        totalStudents: 0,
+        letterGradesPublished: course.letterGradesPublished || false
+      });
+    }
+    
+    const policy = course.policy || {};
+    const maxMarks = course.maxMarks || {};
+    
+    // Calculate weighted scores for each student
+    const studentScores = [];
+    const studentGradeMapping = {};
+    
+    console.log(`Processing ${grades.length} grades for course ${courseId}`);
+    
+    // First pass: Calculate all student percentage scores
+    grades.forEach(grade => {
+      let weightedScore = 0;
+      let totalWeight = 0;
+      
+      // Calculate weighted score for this student
+      for (const assessment in policy) {
+        const weight = policy[assessment];
+        if (weight > 0) {
+          const marks = grade.marks[assessment] || 0;
+          const max = maxMarks[assessment] || 100;
+          const percentage = (marks / max) * 100;
+          
+          weightedScore += percentage * (weight / 100);
+          totalWeight += weight / 100;
+        }
+      }
+      
+      // If no policy is defined, use a simple average of available marks
+      if (totalWeight === 0 && grade.marks) {
+        let totalMarks = 0;
+        let totalMaxMarks = 0;
+        let hasMarks = false;
+        
+        for (const assessment in grade.marks) {
+          if (grade.marks[assessment] > 0) {
+            const marks = grade.marks[assessment] || 0;
+            const max = maxMarks[assessment] || 100;
+            totalMarks += marks;
+            totalMaxMarks += max;
+            hasMarks = true;
+          }
+        }
+        
+        if (hasMarks && totalMaxMarks > 0) {
+          weightedScore = (totalMarks / totalMaxMarks) * 100;
+          totalWeight = 1;
+        }
+      }
+      
+      if (totalWeight > 0) {
+        const finalScore = weightedScore / totalWeight;
+        studentScores.push(finalScore);
+        
+        // Store student info for later grade assignment
+        studentGradeMapping[grade.student.id] = {
+          score: finalScore,
+          studentName: grade.student.name || "Unknown",
+          letterGrade: "F" // Will be assigned in second pass
+        };
+      }
+    });
+
+    // Second pass: Calculate Gaussian-based grade boundaries and assign letter grades
+    console.log(`\n=== GAUSSIAN BOUNDARY CALCULATION ===`);
+    
+    if (course.letterGradesPublished && studentScores.length > 0) {
+      // Calculate class statistics
+      const mean = studentScores.reduce((sum, score) => sum + score, 0) / studentScores.length;
+      const variance = studentScores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / studentScores.length;
+      const stdDev = Math.sqrt(variance);
+      
+      console.log(`Class statistics - Mean: ${mean.toFixed(2)}%, StdDev: ${stdDev.toFixed(2)}%`);
+      
+      // Calculate Gaussian-based percentage boundaries
+      const gaussianBoundaries = calculateGaussianBoundaries(mean, stdDev);
+      console.log('Gaussian boundaries calculated:', gaussianBoundaries);
+      
+      // Assign grades to each student based on percentage scores with Gaussian boundaries
+      Object.keys(studentGradeMapping).forEach(studentId => {
+        const studentData = studentGradeMapping[studentId];
+        const finalScore = studentData.score;
+        
+        console.log(`Student ${studentData.studentName} - Score: ${finalScore.toFixed(2)}%`);
+        
+        let letterGrade = "F";
+        
+        // Check grades from highest to lowest
+        const sortedGrades = Object.entries(gaussianBoundaries).sort(([,a], [,b]) => b.min - a.min);
+        
+        for (const [gradeLabel, gradeData] of sortedGrades) {
+          if (finalScore >= gradeData.min && (finalScore <= gradeData.max || gradeData.max === 100)) {
+            letterGrade = gradeLabel;
+            console.log(`  ✅ Assigned grade: ${letterGrade} (${gradeData.min}% - ${gradeData.max}%)`);
+            break;
+          }
+        }
+        
+        studentGradeMapping[studentId].letterGrade = letterGrade;
+      });
+    }
+
+    // Create histogram data (bins of 10%)
+    const histogram = Array.from({ length: 10 }, (_, i) => ({
+      range: `${i * 10}-${(i + 1) * 10}%`,
+      count: 0,
+      students: []
+    }));
+
+    // Count students in each bin and per letter grade
+    const letterGradeCounts = {};
+    Object.values(studentGradeMapping).forEach(student => {
+      // Add to histogram
+      const binIndex = Math.min(Math.floor(student.score / 10), 9);
+      if (binIndex >= 0) {
+        histogram[binIndex].count++;
+        histogram[binIndex].students.push({
+          name: student.studentName,
+          score: Math.round(student.score * 100) / 100,
+          letterGrade: student.letterGrade
+        });
+      }
+      
+      // Count letter grades
+      letterGradeCounts[student.letterGrade] = (letterGradeCounts[student.letterGrade] || 0) + 1;
+    });
+
+    // Convert studentGradeMapping to array format for frontend
+    const studentList = Object.entries(studentGradeMapping).map(([studentId, data]) => ({
+      studentId: parseInt(studentId),
+      name: data.studentName,
+      finalGrade: Math.round(data.score * 100) / 100,
+      letterGrade: data.letterGrade
+    }));
+
+    console.log(`Final results: ${Object.keys(studentGradeMapping).length} students processed`);
+    console.log('Letter grade distribution:', letterGradeCounts);
+
+    res.json({
+      course: { name: course.name, code: course.code },
+      gradingScale: getDefaultGradingScale(),
+      distribution: histogram,
+      studentCounts: letterGradeCounts,
+      students: studentList,
+      totalStudents: studentScores.length,
+      letterGradesPublished: course.letterGradesPublished || false
+    });
+    
+  } catch (error) {
+    console.error("Error getting grade distribution:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Helper function to calculate Gaussian boundaries
+function calculateGaussianBoundaries(mean, stdDev) {
+  // If standard deviation is too small, use default percentage boundaries
+  if (stdDev < 1) {
+    console.log("Standard deviation too small, using default percentage boundaries");
+    return getDefaultGradingScale();
+  }
+
+  // Calculate boundaries based on Gaussian distribution (sigma values)
+  const boundaries = {
+    'A+': { 
+      min: Math.max(0, Math.min(100, mean + 2.0 * stdDev)), 
+      max: 100,
+      color: '#10B981'
+    },
+    'A': { 
+      min: Math.max(0, Math.min(100, mean + 1.5 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean + 2.0 * stdDev)),
+      color: '#34D399'
+    },
+    'A-': { 
+      min: Math.max(0, Math.min(100, mean + 1.0 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean + 1.5 * stdDev)),
+      color: '#6EE7B7'
+    },
+    'B+': { 
+      min: Math.max(0, Math.min(100, mean + 0.5 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean + 1.0 * stdDev)),
+      color: '#3B82F6'
+    },
+    'B': { 
+      min: Math.max(0, Math.min(100, mean)), 
+      max: Math.max(0, Math.min(100, mean + 0.5 * stdDev)),
+      color: '#60A5FA'
+    },
+    'B-': { 
+      min: Math.max(0, Math.min(100, mean - 0.5 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean)),
+      color: '#93C5FD'
+    },
+    'C+': { 
+      min: Math.max(0, Math.min(100, mean - 1.0 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean - 0.5 * stdDev)),
+      color: '#F59E0B'
+    },
+    'C': { 
+      min: Math.max(0, Math.min(100, mean - 1.5 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean - 1.0 * stdDev)),
+      color: '#FBBF24'
+    },
+    'C-': { 
+      min: Math.max(0, Math.min(100, mean - 2.0 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean - 1.5 * stdDev)),
+      color: '#FCD34D'
+    },
+    'D': { 
+      min: Math.max(0, Math.min(100, mean - 2.5 * stdDev)), 
+      max: Math.max(0, Math.min(100, mean - 2.0 * stdDev)),
+      color: '#EF4444'
+    },
+    'F': { 
+      min: 0, 
+      max: Math.max(0, Math.min(100, mean - 2.5 * stdDev)),
+      color: '#DC2626'
+    }
+  };
+
+  // Round boundaries to 2 decimal places
+  Object.keys(boundaries).forEach(grade => {
+    boundaries[grade].min = Math.round(boundaries[grade].min * 100) / 100;
+    boundaries[grade].max = Math.round(boundaries[grade].max * 100) / 100;
+  });
+
+  return boundaries;
+}
+
+// Helper function to get default grading scale (percentage-based)
+function getDefaultGradingScale() {
+  return {
+    'A+': { min: 97, max: 100, color: '#10B981' },
+    'A': { min: 93, max: 97, color: '#34D399' },
+    'A-': { min: 87, max: 93, color: '#6EE7B7' },
+    'B+': { min: 83, max: 87, color: '#3B82F6' },
+    'B': { min: 77, max: 83, color: '#60A5FA' },
+    'B-': { min: 73, max: 77, color: '#93C5FD' },
+    'C+': { min: 67, max: 73, color: '#F59E0B' },
+    'C': { min: 63, max: 67, color: '#FBBF24' },
+    'C-': { min: 57, max: 63, color: '#FCD34D' },
+    'D': { min: 50, max: 57, color: '#EF4444' },
+    'F': { min: 0, max: 50, color: '#DC2626' }
+  };
+}
   

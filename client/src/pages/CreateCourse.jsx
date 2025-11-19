@@ -18,6 +18,8 @@ export default function CreateCourse() {
       attendance: 0,
       participation: 0,
     },
+    quizCount: 0,
+    assignmentCount: 0,
   });
 
   // Handle course creation
@@ -28,6 +30,16 @@ export default function CreateCourse() {
       const total = Object.values(form.policy).reduce((a, b) => a + b, 0);
       if (total !== 100) {
         return alert("Total course policy percentages must add up to 100");
+      }
+
+      // Validate quiz count if quizzes have non-zero percentage
+      if (form.policy.quizzes > 0 && form.quizCount === 0) {
+        return alert("Quiz count must be greater than 0 when quizzes have a non-zero percentage");
+      }
+
+      // Validate assignment count if assignments have non-zero percentage
+      if (form.policy.assignment > 0 && form.assignmentCount === 0) {
+        return alert("Assignment count must be greater than 0 when assignments have a non-zero percentage");
       }
 
       await api.post("/courses/create", form);
@@ -157,6 +169,61 @@ export default function CreateCourse() {
                   >
                     {Object.values(form.policy).reduce((a, b) => a + b, 0)}%
                   </span>
+                </p>
+              </div>
+
+              {/* Assessment Configuration */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Assessment Configuration
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col">
+                    <label className="text-sm font-medium text-gray-600 mb-1">
+                      Number of Quizzes {form.policy.quizzes > 0 && "*"}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={form.quizCount}
+                      onChange={(e) => setForm({ ...form, quizCount: Number(e.target.value) })}
+                      className={`border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        form.policy.quizzes > 0 && form.quizCount === 0 
+                          ? 'border-red-300 bg-red-50' 
+                          : 'border-gray-300'
+                      }`}
+                      required={form.policy.quizzes > 0}
+                    />
+                    {form.policy.quizzes > 0 && form.quizCount === 0 && (
+                      <p className="text-red-500 text-xs mt-1">Required when quizzes have non-zero percentage</p>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col">
+                    <label className="text-sm font-medium text-gray-600 mb-1">
+                      Number of Assignments {form.policy.assignment > 0 && "*"}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={5}
+                      value={form.assignmentCount}
+                      onChange={(e) => setForm({ ...form, assignmentCount: Number(e.target.value) })}
+                      className={`border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        form.policy.assignment > 0 && form.assignmentCount === 0 
+                          ? 'border-red-300 bg-red-50' 
+                          : 'border-gray-300'
+                      }`}
+                      required={form.policy.assignment > 0}
+                    />
+                    {form.policy.assignment > 0 && form.assignmentCount === 0 && (
+                      <p className="text-red-500 text-xs mt-1">Required when assignments have non-zero percentage</p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  Specify the number of individual assessments for proper grade calculation
                 </p>
               </div>
 

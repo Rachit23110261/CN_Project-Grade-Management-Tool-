@@ -153,6 +153,33 @@ const Challenge = {
     );
 
     return result.rows.map(enhanceChallenge);
+  },
+
+  // Delete multiple challenges based on filter
+  async deleteMany(filter) {
+    let query = 'DELETE FROM challenges WHERE 1=1';
+    const params = [];
+    let paramCount = 1;
+
+    if (filter.course) {
+      query += ` AND course_id = $${paramCount}`;
+      params.push(filter.course);
+      paramCount++;
+    }
+
+    if (filter.student) {
+      query += ` AND student_id = $${paramCount}`;
+      params.push(filter.student);
+      paramCount++;
+    }
+
+    try {
+      const result = await pool.query(query, params);
+      return { deletedCount: result.rowCount };
+    } catch (error) {
+      console.error('Error in Challenge.deleteMany:', error);
+      throw new Error('Failed to delete challenges');
+    }
   }
 };
 

@@ -1,5 +1,5 @@
 import express from "express";
-import { getCourseGrades, updateCourseGrades, getStudentGrades, uploadGradesFromCSV, getGradeById, getCourseStatistics } from "../controllers/gradeController.js";
+import { getCourseGrades, updateCourseGrades, getStudentGrades, uploadGradesFromCSV, getGradeById, getCourseStatistics, getGradeDistribution } from "../controllers/gradeController.js";
 import { verifyToken, isProfessor, isStudent } from "../middleware/authMiddleware.js";
 import { validateGrades, validateCourseId } from "../middleware/validationMiddleware.js";
 import { gradeUpdateLimiter } from "../middleware/rateLimiter.js";
@@ -11,6 +11,9 @@ router.get("/grade/:gradeId", verifyToken, getGradeById);
 
 // Get statistics for a course - must come before generic /:courseId
 router.get("/:courseId/statistics", verifyToken, isProfessor, validateCourseId, getCourseStatistics);
+
+// Get grade distribution for histogram display - must come before generic /:courseId
+router.get("/:courseId/distribution", verifyToken, isProfessor, validateCourseId, getGradeDistribution);
 
 // Student route - get their own grades for a course
 router.get("/student/:courseId", verifyToken, isStudent, validateCourseId, getStudentGrades);

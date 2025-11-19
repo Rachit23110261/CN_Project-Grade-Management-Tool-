@@ -12,17 +12,27 @@ export const createChallenge = async (req, res, next) => {
     const { courseId, gradeId, description, attachmentUrl, attachmentName } = req.body;
     const studentId = req.user.id;
 
+    console.log("🔍 Creating challenge with data:", {
+      courseId, gradeId, description, studentId,
+      hasAttachment: !!attachmentUrl
+    });
+
     // Verify the grade exists and belongs to this student
-    const grade = await Grade.findOne({ id: gradeId, studentId: studentId });
+    const grade = await Grade.findOne({ id: gradeId, student: studentId });
     if (!grade) {
+      console.log("❌ Grade not found for student:", studentId, "grade:", gradeId);
       return res.status(404).json({ message: "Grade not found or does not belong to you" });
     }
 
+    console.log("✅ Grade found:", grade.id);
+
     // Check how many challenges already exist for this course by this student
     const challengeCount = await Challenge.countDocuments({
-      courseId: courseId,
-      studentId: studentId,
+      course: courseId,
+      student: studentId,
     });
+
+    console.log("📊 Current challenge count:", challengeCount);
 
     // Limit to 5 challenges per course
     if (challengeCount >= 5) {
@@ -33,26 +43,41 @@ export const createChallenge = async (req, res, next) => {
 
     // Create challenge
     const challenge = await Challenge.create({
-      studentId: studentId,
-      courseId: courseId,
-      gradeId: gradeId,
+      student: studentId,
+      course: courseId,
+      grade: gradeId,
       description,
       attachmentUrl: attachmentUrl || null,
       attachmentName: attachmentName || null,
     });
 
+    console.log("✅ Challenge created:", challenge.id);
+
     // Get course and professor info for email notification
-    let course = await Course.findById(courseId);
-    course = await Course.populate(course, ['professor']);
+    const course = await Course.findById(courseId);
     const student = await User.findById(studentId);
+
+    console.log("📧 Sending notification:", {
+      professorEmail: course?.professor?.email,
+      studentName: student?.name,
+      courseName: course?.name
+    });
 
     // Send notification to professor
     if (course?.professor?.email) {
-      await sendChallengeNotification(
-        course.professor.email,
-        student.name,
-        course.name
-      );
+      try {
+        await sendChallengeNotification(
+          course.professor.email,
+          student.name,
+          course.name
+        );
+        console.log("✅ Email notification sent to professor");
+      } catch (emailError) {
+        console.log("⚠️ Email notification failed:", emailError.message);
+        // Don't fail the challenge creation if email fails
+      }
+    } else {
+      console.log("⚠️ No professor email found for notification");
     }
 
     res.status(201).json({
@@ -62,6 +87,7 @@ export const createChallenge = async (req, res, next) => {
       maxChallenges: 5,
     });
   } catch (err) {
+    console.error("❌ Challenge creation failed:", err);
     next(err);
   }
 };
@@ -73,7 +99,7 @@ export const getStudentChallenges = async (req, res, next) => {
   try {
     const studentId = req.user.id;
 
-    const challenges = await Challenge.find({ studentId: studentId });
+    const challenges = await Challenge.find({ student: studentId });
 
     res.json(challenges);
   } catch (err) {
@@ -106,12 +132,12 @@ export const getCourseChallenges = async (req, res, next) => {
     const professorId = req.user.id;
 
     // Verify professor owns this course
-    const course = await Course.findOne({ id: courseId, professorId: professorId });
+    const course = await Course.findOne({ id: courseId, professor: professorId });
     if (!course) {
       return res.status(403).json({ message: "Not authorized to view these challenges" });
     }
 
-    const challenges = await Challenge.find({ courseId: courseId });
+    const challenges = await Challenge.find({ course: courseId });
 
     res.json(challenges);
   } catch (err) {
@@ -128,20 +154,40 @@ export const respondToChallenge = async (req, res, next) => {
     const { response, attachmentUrl, attachmentName } = req.body;
     const professorId = req.user.id;
 
-    // Find the challenge
-    let challenge = await Challenge.findById(id);
+    console.log("🔍 Professor responding to challenge:", {
+      challengeId: id,
+      professorId,
+      hasResponse: !!response,
+      hasAttachment: !!attachmentUrl
+    });
+
+    // Find the challenge (it already comes populated from the model)
+    const challenge = await Challenge.findById(id);
 
     if (!challenge) {
+      console.log("❌ Challenge not found:", id);
       return res.status(404).json({ message: "Challenge not found" });
     }
 
-    // Populate course to verify ownership
-    challenge = await Challenge.populate(challenge, ['course']);
+    console.log("✅ Challenge found:", {
+      id: challenge.id,
+      courseId: challenge.course?.id || challenge.course,
+      courseProfessor: challenge.course?.professor_id || challenge.course?.professor,
+      student: challenge.student?.name || challenge.student
+    });
 
     // Verify professor owns the course
-    if (challenge.course.professorId !== professorId) {
+    // The challenge already has course data populated from the model
+    const courseProfessorId = challenge.course?.professor_id || challenge.course?.professor;
+    if (courseProfessorId !== professorId) {
+      console.log("❌ Unauthorized access:", {
+        courseProfessor: courseProfessorId,
+        requestingProfessor: professorId
+      });
       return res.status(403).json({ message: "Not authorized to respond to this challenge" });
     }
+
+    console.log("✅ Authorization verified, updating challenge...");
 
     // Update challenge with response
     const updatedChallenge = await Challenge.findByIdAndUpdate(
@@ -156,10 +202,24 @@ export const respondToChallenge = async (req, res, next) => {
       { new: true }
     );
 
+    console.log("✅ Challenge updated successfully");
+
     // Send notification to student
-    const student = await User.findById(challenge.studentId);
-    if (student?.email) {
-      await sendChallengeResponseNotification(student.email, challenge.course.name);
+    const studentId = challenge.student?.id || challenge.student;
+    if (studentId) {
+      try {
+        const student = await User.findById(studentId);
+        if (student?.email) {
+          await sendChallengeResponseNotification(
+            student.email, 
+            challenge.course?.name || 'Unknown Course'
+          );
+          console.log("✅ Email notification sent to student");
+        }
+      } catch (emailError) {
+        console.log("⚠️ Email notification failed:", emailError.message);
+        // Don't fail the response if email fails
+      }
     }
 
     res.json({
@@ -167,6 +227,7 @@ export const respondToChallenge = async (req, res, next) => {
       challenge: updatedChallenge,
     });
   } catch (err) {
+    console.error("❌ Error in respondToChallenge:", err);
     next(err);
   }
 };
@@ -180,26 +241,25 @@ export const getChallengeById = async (req, res, next) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    let challenge = await Challenge.findById(id);
+    const challenge = await Challenge.findById(id);
 
     if (!challenge) {
       return res.status(404).json({ message: "Challenge not found" });
     }
 
-    // Populate related data
-    challenge = await Challenge.populate(challenge, ['student', 'course', 'grade']);
+    // Challenge already comes with populated data from the model
 
     // Check authorization
-    if (userRole === "student" && challenge.studentId !== userId) {
+    const studentId = challenge.student?.id || challenge.student;
+    if (userRole === "student" && studentId !== userId) {
       return res.status(403).json({ message: "Not authorized to view this challenge" });
     }
 
     if (userRole === "professor") {
-      const course = await Course.findOne({
-        id: challenge.courseId,
-        professorId: userId,
-      });
-      if (!course) {
+      const courseId = challenge.course?.id || challenge.course;
+      const courseProfessorId = challenge.course?.professor_id || challenge.course?.professor;
+      
+      if (courseProfessorId !== userId) {
         return res.status(403).json({ message: "Not authorized to view this challenge" });
       }
     }
@@ -219,8 +279,8 @@ export const getChallengeCount = async (req, res, next) => {
     const studentId = req.user.id;
 
     const count = await Challenge.countDocuments({
-      courseId: courseId,
-      studentId: studentId,
+      course: courseId,
+      student: studentId,
     });
 
     res.json({

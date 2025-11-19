@@ -1,5 +1,7 @@
 import Course from "../models/Course.js";
 import User from "../models/userModel.js";
+import Grade from "../models/Grade.js";
+import Challenge from "../models/Challenge.js";
 
 export const createCourse = async (req, res) => {
   try {
@@ -17,6 +19,38 @@ export const createCourse = async (req, res) => {
       if (Math.abs(total - 100) > 0.01) {
         return res.status(400).json({ message: "Policy percentages must total 100%" });
       }
+
+      // Validate quiz count if quizzes have non-zero percentage
+      const quizPercentage = req.body.policy.quizzes || 0;
+      const quizCount = req.body.quizCount || 0;
+      if (quizPercentage > 0 && quizCount === 0) {
+        return res.status(400).json({ 
+          message: "Quiz count must be greater than 0 when quizzes have a non-zero percentage" 
+        });
+      }
+
+      // Validate assignment count if assignments have non-zero percentage
+      const assignmentPercentage = req.body.policy.assignment || 0;
+      const assignmentCount = req.body.assignmentCount || 0;
+      if (assignmentPercentage > 0 && assignmentCount === 0) {
+        return res.status(400).json({ 
+          message: "Assignment count must be greater than 0 when assignments have a non-zero percentage" 
+        });
+      }
+
+      // Validate quiz count is within reasonable limits
+      if (quizCount > 10) {
+        return res.status(400).json({ 
+          message: "Quiz count cannot exceed 10" 
+        });
+      }
+
+      // Validate assignment count is within reasonable limits
+      if (assignmentCount > 5) {
+        return res.status(400).json({ 
+          message: "Assignment count cannot exceed 5" 
+        });
+      }
     }
     
     const course = await Course.create({
@@ -31,6 +65,7 @@ export const createCourse = async (req, res) => {
     });
     res.status(201).json(course);
   } catch (error) {
+    console.error("Error creating course:", error);
     res.status(500).json({ message: "Failed to create course" });
   }
 };
@@ -60,7 +95,7 @@ export const getAllCourses = async (req, res) => {
 // Get all courses created by this professor
 export const getMyCourses = async (req, res) => {
   try {
-    let courses = await Course.find({ professor: req.user.id }); // Changed from professorId to professor
+    let courses = await Course.find({ professor: req.user.id });
     
     // Populate students and professor for each course
     courses = await Promise.all(
@@ -142,6 +177,26 @@ export const updateCourse = async (req, res) => {
       const total = Object.values(req.body.policy).reduce((a, b) => a + b, 0);
       if (Math.abs(total - 100) > 0.01) {
         return res.status(400).json({ message: "Policy percentages must total 100%" });
+      }
+
+      // Get current quiz and assignment counts
+      const currentQuizCount = course.quizCount || 0;
+      const currentAssignmentCount = course.assignmentCount || 0;
+
+      // Validate quiz count if quizzes have non-zero percentage
+      const quizPercentage = req.body.policy.quizzes || 0;
+      if (quizPercentage > 0 && currentQuizCount === 0) {
+        return res.status(400).json({ 
+          message: "Quiz count must be greater than 0 when quizzes have a non-zero percentage. Please add quizzes first." 
+        });
+      }
+
+      // Validate assignment count if assignments have non-zero percentage
+      const assignmentPercentage = req.body.policy.assignment || 0;
+      if (assignmentPercentage > 0 && currentAssignmentCount === 0) {
+        return res.status(400).json({ 
+          message: "Assignment count must be greater than 0 when assignments have a non-zero percentage. Please add assignments first." 
+        });
       }
     }
     
@@ -340,7 +395,15 @@ export const removeStudentFromCourse = async (req, res) => {
     await Course.removeStudent(courseId, studentId);
     await User.unenrollCourse(studentId, courseId);
     
-    res.json({ message: "Student removed from course successfully" });
+    // Delete all grades for this student in this course
+    const gradeResult = await Grade.deleteMany({ course: courseId, student: studentId });
+    console.log(`Deleted ${gradeResult.deletedCount} grades for student ${studentId} in course ${courseId}`);
+    
+    // Delete all challenges for this student in this course
+    const challengeResult = await Challenge.deleteMany({ course: courseId, student: studentId });
+    console.log(`Deleted ${challengeResult.deletedCount} challenges for student ${studentId} in course ${courseId}`);
+    
+    res.json({ message: "Student, their grades, and challenges removed from course successfully" });
   } catch (error) {
     console.error("Error removing student from course:", error);
     res.status(500).json({ message: error.message });
@@ -371,14 +434,31 @@ export const leaveCourse = async (req, res) => {
         });
       }
       
+      // Delete all grades for this course before deleting the course
+      const gradeResult = await Grade.deleteMany({ course: courseId });
+      console.log(`Deleted ${gradeResult.deletedCount} grades for course ${courseId}`);
+      
+      // Delete all challenges for this course before deleting the course
+      const challengeResult = await Challenge.deleteMany({ course: courseId });
+      console.log(`Deleted ${challengeResult.deletedCount} challenges for course ${courseId}`);
+      
       // Delete the course
       await Course.findByIdAndDelete(courseId);
-      res.json({ message: "Course deleted successfully" });
+      res.json({ message: "Course deleted successfully with all associated data" });
     } else {
-      // Student leaving the course
+      // Student leaving the course - remove their grades and challenges too
       await Course.removeStudent(courseId, userId);
       await User.unenrollCourse(userId, courseId);
-      res.json({ message: "Successfully left the course" });
+      
+      // Delete student's grades for this course
+      const gradeResult = await Grade.deleteMany({ course: courseId, student: userId });
+      console.log(`Deleted ${gradeResult.deletedCount} grades for student ${userId} leaving course ${courseId}`);
+      
+      // Delete student's challenges for this course
+      const challengeResult = await Challenge.deleteMany({ course: courseId, student: userId });
+      console.log(`Deleted ${challengeResult.deletedCount} challenges for student ${userId} leaving course ${courseId}`);
+      
+      res.json({ message: "Successfully left the course with all grades and challenges removed" });
     }
   } catch (error) {
     console.error("Error leaving course:", error);
@@ -410,6 +490,62 @@ export const updateGradingScale = async (req, res) => {
     // Validate grading scale format
     if (!gradingScale || typeof gradingScale !== 'object') {
       return res.status(400).json({ message: "Invalid grading scale format" });
+    }
+
+    // Validate grading scale format - support both percentage-based and sigma-based systems
+    const grades = Object.entries(gradingScale);
+    let isSigmaBased = false;
+    
+    // Check if this is a sigma-based grading system
+    if (grades.length > 0) {
+      const firstGrade = grades[0][1];
+      isSigmaBased = firstGrade.minSigma !== undefined || firstGrade.maxSigma !== undefined;
+    }
+    
+    console.log(`Validating ${isSigmaBased ? 'sigma-based' : 'percentage-based'} grading scale`);
+    
+    for (let i = 0; i < grades.length; i++) {
+      const [gradeName, gradeData] = grades[i];
+      
+      if (isSigmaBased) {
+        // Sigma-based validation
+        if (typeof gradeData.minSigma !== 'number' || typeof gradeData.maxSigma !== 'number') {
+          return res.status(400).json({ 
+            message: `Invalid sigma boundaries for ${gradeName}. minSigma and maxSigma must be numbers.` 
+          });
+        }
+        
+        if (gradeData.minSigma > gradeData.maxSigma) {
+          return res.status(400).json({ 
+            message: `Invalid sigma boundaries for ${gradeName}. minSigma cannot be greater than maxSigma.` 
+          });
+        }
+        
+        if (gradeData.minSigma < -4 || gradeData.maxSigma > 4) {
+          return res.status(400).json({ 
+            message: `Sigma boundaries for ${gradeName} must be between -4 and 4 standard deviations.` 
+          });
+        }
+      } else {
+        // Percentage-based validation (legacy)
+        if (typeof gradeData.min !== 'number' || typeof gradeData.max !== 'number') {
+          return res.status(400).json({ 
+            message: `Invalid grade boundaries for ${gradeName}. Min and max must be numbers.` 
+          });
+        }
+        
+        if (gradeData.min > gradeData.max) {
+          return res.status(400).json({ 
+            message: `Invalid grade boundaries for ${gradeName}. Minimum cannot be greater than maximum.` 
+          });
+        }
+        
+        if (gradeData.min < 0 || gradeData.max > 100) {
+          return res.status(400).json({ 
+            message: `Grade boundaries for ${gradeName} must be between 0 and 100.` 
+          });
+        }
+      }
     }
     
     // Update the grading scale

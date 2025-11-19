@@ -27,8 +27,13 @@ const Grade = {
       paramCount++;
     }
 
-    const result = await pool.query(query, params);
-    return result.rows.map(enhanceGrade);
+    try {
+      const result = await pool.query(query, params);
+      return result.rows.map(enhanceGrade);
+    } catch (error) {
+      console.error('Error in Grade.find:', error);
+      throw new Error('Failed to fetch grades');
+    }
   },
 
   // Find one grade
@@ -58,8 +63,14 @@ const Grade = {
     }
 
     query += ' LIMIT 1';
-    const result = await pool.query(query, params);
-    return result.rows[0] ? enhanceGrade(result.rows[0]) : null;
+    
+    try {
+      const result = await pool.query(query, params);
+      return result.rows[0] ? enhanceGrade(result.rows[0]) : null;
+    } catch (error) {
+      console.error('Error in Grade.findOne:', error);
+      throw new Error('Failed to fetch grade');
+    }
   },
 
   // Find grade by ID
@@ -172,6 +183,33 @@ const Grade = {
 
     // Already populated in queries above
     return grade;
+  },
+
+  // Delete multiple grades based on filter
+  async deleteMany(filter) {
+    let query = 'DELETE FROM grades WHERE 1=1';
+    const params = [];
+    let paramCount = 1;
+
+    if (filter.course) {
+      query += ` AND course_id = $${paramCount}`;
+      params.push(filter.course);
+      paramCount++;
+    }
+
+    if (filter.student) {
+      query += ` AND student_id = $${paramCount}`;
+      params.push(filter.student);
+      paramCount++;
+    }
+
+    try {
+      const result = await pool.query(query, params);
+      return { deletedCount: result.rowCount };
+    } catch (error) {
+      console.error('Error in Grade.deleteMany:', error);
+      throw new Error('Failed to delete grades');
+    }
   }
 };
 
