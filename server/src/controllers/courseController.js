@@ -61,7 +61,8 @@ export const createCourse = async (req, res) => {
       policy: req.body.policy || {},
       maxMarks: req.body.maxMarks || {},
       quizCount: req.body.quizCount || 0,
-      assignmentCount: req.body.assignmentCount || 0
+      assignmentCount: req.body.assignmentCount || 0,
+      gradingScheme: req.body.gradingScheme || 'relative'
     });
     res.status(201).json(course);
   } catch (error) {
@@ -206,6 +207,7 @@ export const updateCourse = async (req, res) => {
     if (req.body.code) updateData.code = req.body.code;
     if (req.body.description) updateData.description = req.body.description;
     if (req.body.policy) updateData.policy = req.body.policy;
+    if (req.body.gradingScheme) updateData.gradingScheme = req.body.gradingScheme;
     
     const updatedCourse = await Course.findByIdAndUpdate(req.params.courseId, updateData, { new: true });
     

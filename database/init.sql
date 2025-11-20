@@ -85,6 +85,7 @@ CREATE TABLE courses (
     quiz_count INTEGER DEFAULT 0 CHECK (quiz_count >= 0 AND quiz_count <= 10),
     assignment_count INTEGER DEFAULT 0 CHECK (assignment_count >= 0 AND assignment_count <= 5),
     letter_grades_published BOOLEAN DEFAULT FALSE,
+    grading_scheme VARCHAR(20) DEFAULT 'relative' CHECK (grading_scheme IN ('relative', 'absolute')),
     grading_scale JSONB DEFAULT '{
         "A+": {"min": 95, "max": 100},
         "A": {"min": 90, "max": 94.99},

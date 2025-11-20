@@ -359,27 +359,30 @@ export const validateAssignmentCount = [
 // Grading Scale Validation
 export const validateGradingScale = [
   body('gradingScale')
-    .isObject().withMessage('Grading scale must be an object'),
-  
-  body('gradingScale.A+')
-    .optional()
-    .isFloat().withMessage('A+ threshold must be a number'),
-  
-  body('gradingScale.A')
-    .optional()
-    .isFloat().withMessage('A threshold must be a number'),
-  
-  body('gradingScale.B')
-    .optional()
-    .isFloat().withMessage('B threshold must be a number'),
-  
-  body('gradingScale.C')
-    .optional()
-    .isFloat().withMessage('C threshold must be a number'),
-  
-  body('gradingScale.D')
-    .optional()
-    .isFloat().withMessage('D threshold must be a number'),
+    .isObject().withMessage('Grading scale must be an object')
+    .custom((value) => {
+      // Check if all values are either numbers (relative grading) or objects with min/max (absolute grading)
+      const values = Object.values(value);
+      
+      // Check if it's relative grading (all numbers)
+      const allNumbers = values.every(v => typeof v === 'number');
+      if (allNumbers) return true;
+      
+      // Check if it's absolute grading (all objects with min/max)
+      const allObjects = values.every(v => 
+        typeof v === 'object' && 
+        v !== null && 
+        typeof v.min === 'number' && 
+        typeof v.max === 'number' &&
+        v.min >= 0 && 
+        v.max <= 100 &&
+        v.min <= v.max
+      );
+      
+      if (allObjects) return true;
+      
+      throw new Error('Grading scale must contain either all numbers (for relative grading) or all objects with min/max properties (for absolute grading)');
+    }),
   
   validate
 ];

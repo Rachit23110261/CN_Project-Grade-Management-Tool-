@@ -28,16 +28,39 @@ export default function GradeManagement() {
         setQuizCount(res.data.course.quizCount || 0);
         setAssignmentCount(res.data.course.assignmentCount || 0);
         setMaxMarks(res.data.course.maxMarks || {});
-        setGradingScale(res.data.course.gradingScale || {
-          "A+": 1.5,
-          "A": 1.0,
-          "A-": 0.5,
-          "B": 0.0,
-          "C": -0.5,
-          "D": -1.0,
-          "E": -1.5,
-          "F": -2.0
-        });
+        
+        // Initialize grading scale based on grading scheme
+        if (res.data.course.gradingScale) {
+          setGradingScale(res.data.course.gradingScale);
+        } else {
+          // Set default based on grading scheme
+          if (res.data.course.gradingScheme === 'absolute') {
+            setGradingScale({
+              "A+": { min: 95, max: 100 },
+              "A": { min: 90, max: 94.99 },
+              "A-": { min: 85, max: 89.99 },
+              "B+": { min: 80, max: 84.99 },
+              "B": { min: 75, max: 79.99 },
+              "B-": { min: 70, max: 74.99 },
+              "C+": { min: 65, max: 69.99 },
+              "C": { min: 60, max: 64.99 },
+              "C-": { min: 55, max: 59.99 },
+              "D": { min: 50, max: 54.99 },
+              "F": { min: 0, max: 49.99 }
+            });
+          } else {
+            setGradingScale({
+              "A+": 1.5,
+              "A": 1.0,
+              "A-": 0.5,
+              "B": 0.0,
+              "C": -0.5,
+              "D": -1.0,
+              "E": -1.5,
+              "F": -2.0
+            });
+          }
+        }
 
         // Initialize grades - create deep copy to avoid shared references
         const g = {};
@@ -68,7 +91,7 @@ export default function GradeManagement() {
         ...prev,
         [studentId]: { 
           ...prev[studentId], 
-          [key]: Number(value) || 0
+          [key]: value === '' ? 0 : Number(value)
         }
       };
       console.log(`Updated grades:`, updated);
@@ -176,7 +199,7 @@ export default function GradeManagement() {
   const handleMaxMarksChange = (key, value) => {
     setMaxMarks(prev => ({
       ...prev,
-      [key]: Number(value) || 100
+      [key]: value === '' ? '' : Number(value)
     }));
   };
 
@@ -195,8 +218,8 @@ export default function GradeManagement() {
 
       const response = await api.put(`/courses/${courseId}/max-marks`, { maxMarks: validatedMaxMarks });
       
-      // Update local state with the response
-      setCourse(response.data.course);
+      // Update local state with the response, preserving students array
+      setCourse(prev => ({ ...prev, ...response.data.course, students: prev.students }));
       setMaxMarks(response.data.course.maxMarks || validatedMaxMarks);
       setShowMaxMarksModal(false);
       alert("Max marks updated successfully!");
@@ -232,17 +255,31 @@ export default function GradeManagement() {
     }
   };
 
-  const handleGradingScaleChange = (grade, value) => {
-    setGradingScale(prev => ({
-      ...prev,
-      [grade]: Number(value)
-    }));
+  const handleGradingScaleChange = (grade, field, value) => {
+    const numValue = Number(value);
+    
+    // For relative grading, just store the number
+    if (course?.gradingScheme === 'relative') {
+      setGradingScale(prev => ({
+        ...prev,
+        [grade]: numValue
+      }));
+    } else {
+      // For absolute grading, store min/max object
+      setGradingScale(prev => ({
+        ...prev,
+        [grade]: {
+          ...prev[grade],
+          [field]: numValue
+        }
+      }));
+    }
   };
 
   const handleSaveGradingScale = async () => {
     try {
       const response = await api.put(`/courses/${courseId}/grading-scale`, { gradingScale });
-      setCourse(response.data.course);
+      setCourse(prev => ({ ...prev, ...response.data.course, students: prev.students }));
       setGradingScale(response.data.course.gradingScale);
       setShowGradingScaleModal(false);
       alert("Grading scale updated successfully!");
@@ -593,7 +630,7 @@ export default function GradeManagement() {
                       <input
                         type="number"
                         min={1}
-                        value={maxMarks[key] || 100}
+                        value={maxMarks[key] === undefined || maxMarks[key] === '' ? '' : maxMarks[key]}
                         onChange={(e) => handleMaxMarksChange(key, e.target.value)}
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                         placeholder="100"
@@ -635,7 +672,11 @@ export default function GradeManagement() {
             <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-bold text-white">Grading Scale Configuration</h3>
-                <p className="text-indigo-100 text-sm">Set Z-score thresholds for letter grades</p>
+                <p className="text-indigo-100 text-sm">
+                  {course?.gradingScheme === 'absolute' 
+                    ? 'Set percentage ranges for letter grades' 
+                    : 'Set Z-score thresholds for letter grades'}
+                </p>
               </div>
               <button
                 onClick={() => setShowGradingScaleModal(false)}
@@ -654,65 +695,160 @@ export default function GradeManagement() {
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                   </svg>
                   <div className="flex-1">
-                    <h4 className="font-semibold text-blue-900 mb-1">About Z-Score Grading</h4>
-                    <p className="text-sm text-blue-700">
-                      Z-scores measure how many standard deviations a student's score is from the mean. 
-                      Higher thresholds = stricter grading. Default values follow standard bell curve distribution.
-                    </p>
+                    {course?.gradingScheme === 'absolute' ? (
+                      <>
+                        <h4 className="font-semibold text-blue-900 mb-1">About Absolute Grading</h4>
+                        <p className="text-sm text-blue-700">
+                          Set fixed percentage ranges for each grade. Students scoring within the range will receive that grade.
+                          Ensure ranges don't overlap and cover all possible scores (0-100%).
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="font-semibold text-blue-900 mb-1">About Z-Score Grading</h4>
+                        <p className="text-sm text-blue-700">
+                          Z-scores measure how many standard deviations a student's score is from the mean. 
+                          Higher thresholds = stricter grading. Default values follow standard bell curve distribution.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="space-y-3">
-                {Object.entries(gradingScale).sort((a, b) => b[1] - a[1]).map(([grade, threshold]) => (
-                  <div key={grade} className="flex items-center gap-4 bg-gray-50 rounded-lg p-4">
-                    <div className="flex-shrink-0 w-16 text-center">
-                      <span className="text-2xl font-bold text-gray-900">{grade}</span>
+                {course?.gradingScheme === 'absolute' ? (
+                  // Absolute grading: Show min/max percentage ranges
+                  Object.entries(gradingScale).sort((a, b) => {
+                    const aMin = typeof a[1] === 'object' ? a[1].min : 0;
+                    const bMin = typeof b[1] === 'object' ? b[1].min : 0;
+                    return bMin - aMin;
+                  }).map(([grade, range]) => (
+                    <div key={grade} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center gap-4 mb-2">
+                        <div className="flex-shrink-0 w-16 text-center">
+                          <span className="text-2xl font-bold text-gray-900">{grade}</span>
+                        </div>
+                        <div className="flex-1 text-sm text-gray-600">
+                          Percentage Range
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Minimum %
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={typeof range === 'object' ? range.min : 0}
+                            onChange={(e) => handleGradingScaleChange(grade, 'min', e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Maximum %
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={typeof range === 'object' ? range.max : 100}
+                            onChange={(e) => handleGradingScaleChange(grade, 'max', e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Z-Score Threshold
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={threshold}
-                        onChange={(e) => handleGradingScaleChange(grade, e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="flex-shrink-0 text-sm text-gray-500">
-                      σ ≥ {threshold}
-                    </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  // Relative grading: Show z-score thresholds
+                  Object.entries(gradingScale)
+                    .filter(([_, value]) => typeof value === 'number')
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([grade, threshold]) => (
+                      <div key={grade} className="flex items-center gap-4 bg-gray-50 rounded-lg p-4">
+                        <div className="flex-shrink-0 w-16 text-center">
+                          <span className="text-2xl font-bold text-gray-900">{grade}</span>
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Z-Score Threshold
+                          </label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={threshold}
+                            onChange={(e) => handleGradingScaleChange(grade, null, e.target.value)}
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="flex-shrink-0 text-sm text-gray-500">
+                          σ ≥ {threshold}
+                        </div>
+                      </div>
+                    ))
+                )}
               </div>
 
               <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-semibold text-gray-900 mb-2">Standard Values Reference:</h4>
-                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
-                  <div>• A+: 1.5σ (Top 7%)</div>
-                  <div>• B: 0.0σ (Average)</div>
-                  <div>• A: 1.0σ (Top 16%)</div>
-                  <div>• C: -0.5σ (Below avg)</div>
-                  <div>• A-: 0.5σ (Above avg)</div>
-                  <div>• D: -1.0σ (Bottom 16%)</div>
-                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">
+                  {course?.gradingScheme === 'absolute' ? 'Example Ranges:' : 'Standard Values Reference:'}
+                </h4>
+                {course?.gradingScheme === 'absolute' ? (
+                  <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                    <div>• A+: 95-100%</div>
+                    <div>• B+: 80-84.99%</div>
+                    <div>• A: 90-94.99%</div>
+                    <div>• B: 75-79.99%</div>
+                    <div>• A-: 85-89.99%</div>
+                    <div>• B-: 70-74.99%</div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                    <div>• A+: 1.5σ (Top 7%)</div>
+                    <div>• B: 0.0σ (Average)</div>
+                    <div>• A: 1.0σ (Top 16%)</div>
+                    <div>• C: -0.5σ (Below avg)</div>
+                    <div>• A-: 0.5σ (Above avg)</div>
+                    <div>• D: -1.0σ (Bottom 16%)</div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
                 <button
                   onClick={() => {
-                    setGradingScale({
-                      "A+": 1.5,
-                      "A": 1.0,
-                      "A-": 0.5,
-                      "B": 0.0,
-                      "C": -0.5,
-                      "D": -1.0,
-                      "E": -1.5,
-                      "F": -2.0
-                    });
+                    if (course?.gradingScheme === 'absolute') {
+                      setGradingScale({
+                        "A+": { min: 95, max: 100 },
+                        "A": { min: 90, max: 94.99 },
+                        "A-": { min: 85, max: 89.99 },
+                        "B+": { min: 80, max: 84.99 },
+                        "B": { min: 75, max: 79.99 },
+                        "B-": { min: 70, max: 74.99 },
+                        "C+": { min: 65, max: 69.99 },
+                        "C": { min: 60, max: 64.99 },
+                        "C-": { min: 55, max: 59.99 },
+                        "D": { min: 50, max: 54.99 },
+                        "F": { min: 0, max: 49.99 }
+                      });
+                    } else {
+                      setGradingScale({
+                        "A+": 1.5,
+                        "A": 1.0,
+                        "A-": 0.5,
+                        "B": 0.0,
+                        "C": -0.5,
+                        "D": -1.0,
+                        "E": -1.5,
+                        "F": -2.0
+                      });
+                    }
                   }}
                   className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
                 >

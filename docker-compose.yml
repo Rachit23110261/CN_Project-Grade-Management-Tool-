@@ -38,8 +38,8 @@ services:
       DB_USER: postgres
       DB_PASSWORD: password
       JWT_SECRET: your_jwt_secret_change_in_production
-      EMAIL_USER: your_email@gmail.com
-      EMAIL_PASS: your_app_password
+      EMAIL_USER: cn.cp.pc.5@gmail.com
+      EMAIL_PASS: ofta sjza xkmo iuya
     ports:
       - "5000:5000"
     depends_on:

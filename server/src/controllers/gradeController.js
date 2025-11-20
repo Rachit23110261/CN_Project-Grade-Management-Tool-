@@ -245,7 +245,7 @@ export const updateCourseGrades = async (req, res) => {
                   const score = marks[quizKey] || 0;
                   const max = maxMarks[quizKey] || 100;
                   const weight = policy.quizzes / quizCount;
-                  weightedScore += (score / max) * weight;
+                  weightedScore += (score / max) * 100 * (weight / 100);
                 }
               } else if (key === 'assignment' && assignmentCount > 0) {
                 for (let i = 1; i <= assignmentCount; i++) {
@@ -253,12 +253,12 @@ export const updateCourseGrades = async (req, res) => {
                   const score = marks[assignmentKey] || 0;
                   const max = maxMarks[assignmentKey] || 100;
                   const weight = policy.assignment / assignmentCount;
-                  weightedScore += (score / max) * weight;
+                  weightedScore += (score / max) * 100 * (weight / 100);
                 }
               } else if (key !== 'quizzes' && key !== 'assignment') {
                 const score = marks[key] || 0;
                 const max = maxMarks[key] || 100;
-                weightedScore += (score / max) * policy[key];
+                weightedScore += (score / max) * 100 * (policy[key] / 100);
               }
             }
           });
@@ -277,7 +277,7 @@ export const updateCourseGrades = async (req, res) => {
                       const score = m[quizKey] || 0;
                       const max = maxMarks[quizKey] || 100;
                       const weight = policy.quizzes / quizCount;
-                      ws += (score / max) * weight;
+                      ws += (score / max) * 100 * (weight / 100);
                     }
                   } else if (key === 'assignment' && assignmentCount > 0) {
                     for (let i = 1; i <= assignmentCount; i++) {
@@ -285,59 +285,73 @@ export const updateCourseGrades = async (req, res) => {
                       const score = m[assignmentKey] || 0;
                       const max = maxMarks[assignmentKey] || 100;
                       const weight = policy.assignment / assignmentCount;
-                      ws += (score / max) * weight;
+                      ws += (score / max) * 100 * (weight / 100);
                     }
                   } else if (key !== 'quizzes' && key !== 'assignment') {
                     const score = m[key] || 0;
                     const max = maxMarks[key] || 100;
-                    ws += (score / max) * policy[key];
+                    ws += (score / max) * 100 * (policy[key] / 100);
                   }
                 }
               });
               return ws;
             });
 
-            // Calculate letter grade based on percentage using course's grading scale
+            // Calculate letter grade based on course's grading scheme
+            const gradingScheme = course.gradingScheme || 'relative';
             const gradingScale = course.gradingScale;
             
-            if (gradingScale && course.letterGradesPublished) {
-              // Use new percentage-based grading scale
+            console.log(`📊 Letter Grade Calculation for Student ${studentId}:`);
+            console.log(`  - Weighted Score: ${weightedScore}`);
+            console.log(`  - All Weighted Scores:`, allWeightedScores);
+            console.log(`  - Grading Scheme:`, gradingScheme);
+            console.log(`  - Grading Scale:`, gradingScale);
+            
+            if (gradingScheme === 'absolute' && gradingScale && typeof Object.values(gradingScale)[0] === 'object' && course.letterGradesPublished) {
+              // Use absolute (percentage-based) grading scale set by professor
               const gradeEntries = Object.entries(gradingScale);
               letterGrade = "F"; // Default
+              
+              console.log(`  - Using absolute (percentage-based) grading scale`);
               
               // Check which grade range the weighted score falls into
               for (const [gradeLabel, gradeData] of gradeEntries) {
                 if (typeof gradeData === 'object' && gradeData.min !== undefined && gradeData.max !== undefined) {
-                  // New percentage-based system
                   if (weightedScore >= gradeData.min && weightedScore <= gradeData.max) {
                     letterGrade = gradeLabel;
                     break;
                   }
                 }
               }
-            } else if (gradingScale && typeof Object.values(gradingScale)[0] === 'number') {
-              // Legacy z-score system fallback
+            } else {
+              // Default: Use relative (z-score based) grading (Gaussian distribution)
+              // This matches what professors see in the statistics view
               const mean = allWeightedScores.reduce((a, b) => a + b, 0) / allWeightedScores.length;
               const variance = allWeightedScores.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / allWeightedScores.length;
               const stdDev = Math.sqrt(variance);
               
+              console.log(`  - Using relative (z-score based) grading`);
+              console.log(`  - Mean: ${mean}, StdDev: ${stdDev}`);
+              
               if (stdDev > 0) {
                 const zScore = (weightedScore - mean) / stdDev;
                 
-                // Sort grades by threshold descending to find the appropriate grade
-                const sortedGrades = Object.entries(gradingScale)
-                  .sort((a, b) => b[1] - a[1]);
+                console.log(`  - Z-Score: ${zScore}`);
                 
-                letterGrade = "F"; // Default
-                for (const [gradeLabel, threshold] of sortedGrades) {
-                  if (zScore >= threshold) {
-                    letterGrade = gradeLabel;
-                    break;
-                  }
-                }
+                // Gaussian distribution grading (matches frontend professor view)
+                if (zScore >= 1.5) letterGrade = "A+";
+                else if (zScore >= 1.0) letterGrade = "A";
+                else if (zScore >= 0.5) letterGrade = "A-";
+                else if (zScore >= 0.0) letterGrade = "B";
+                else if (zScore >= -0.5) letterGrade = "C";
+                else if (zScore >= -1.0) letterGrade = "D";
+                else if (zScore >= -1.5) letterGrade = "E";
+                else if (zScore >= -2.0) letterGrade = "F";
+                else letterGrade = "FAIL :)";
               } else {
                 // Edge case: All students have the same weighted score (stdDev = 0)
                 // Assign grade based on absolute performance
+                console.log(`  - StdDev is 0, using absolute grading`);
                 if (weightedScore >= 90) letterGrade = "A+";
                 else if (weightedScore >= 80) letterGrade = "A";
                 else if (weightedScore >= 70) letterGrade = "A-";
@@ -347,17 +361,9 @@ export const updateCourseGrades = async (req, res) => {
                 else if (weightedScore >= 30) letterGrade = "E";
                 else letterGrade = "F";
               }
-            } else {
-              // Default percentage-based grading when no grading scale is defined
-              if (weightedScore >= 90) letterGrade = "A+";
-              else if (weightedScore >= 80) letterGrade = "A";
-              else if (weightedScore >= 70) letterGrade = "A-";
-              else if (weightedScore >= 60) letterGrade = "B";
-              else if (weightedScore >= 50) letterGrade = "C";
-              else if (weightedScore >= 40) letterGrade = "D";
-              else if (weightedScore >= 30) letterGrade = "E";
-              else letterGrade = "F";
             }
+            
+            console.log(`  ✅ Final Letter Grade: ${letterGrade}`);
           }
         } catch (letterGradeError) {
           console.error("Error calculating letter grade:", letterGradeError);

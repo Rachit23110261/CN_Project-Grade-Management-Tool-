@@ -135,6 +135,15 @@ export default function App() {
 />
 
 <Route
+  path="/professor/courses/:courseId/distribution"
+  element={
+    <ProtectedRoute allowedRoles={["professor"]}>
+      <GradeStatistics />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
   path="/grades/:courseId"
   element={
     <ProtectedRoute allowedRoles={["professor"]}>

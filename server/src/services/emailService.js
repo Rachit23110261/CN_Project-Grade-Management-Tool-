@@ -12,7 +12,7 @@ const createTransporter = () => {
     service: "gmail",
     auth: {
       user: process.env.EMAIL_USER || "kaushal.bule@iitgn.ac.in",
-      pass: process.env.EMAIL_PASSWORD, // App password for Gmail
+      pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS, // App password for Gmail
     },
   });
 };

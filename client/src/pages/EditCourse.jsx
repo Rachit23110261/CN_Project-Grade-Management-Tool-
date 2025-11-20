@@ -13,6 +13,7 @@ export default function EditCourse() {
     name: "",
     code: "",
     description: "",
+    gradingScheme: "relative",
     policy: {
       midsem: 0,
       endsem: 0,
@@ -32,6 +33,7 @@ export default function EditCourse() {
           name: res.data.name,
           code: res.data.code,
           description: res.data.description,
+          gradingScheme: res.data.gradingScheme || 'relative',
           policy: res.data.policy,
         });
         setQuizCount(res.data.quizCount || 0);
@@ -239,6 +241,50 @@ export default function EditCourse() {
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   required
                 />
+              </div>
+
+              {/* Grading Scheme */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Grading Scheme *
+                </label>
+                <div className="space-y-3">
+                  <label className="flex items-start p-4 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors" style={{ borderColor: form.gradingScheme === 'relative' ? '#3B82F6' : '#D1D5DB' }}>
+                    <input
+                      type="radio"
+                      name="gradingScheme"
+                      value="relative"
+                      checked={form.gradingScheme === 'relative'}
+                      onChange={(e) => setForm({ ...form, gradingScheme: e.target.value })}
+                      className="mt-1 mr-3"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-800">Relative (Z-Score Distribution)</div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Grades are assigned based on statistical distribution of all students' scores. 
+                        Uses Gaussian curve with mean and standard deviation.
+                      </p>
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-start p-4 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors" style={{ borderColor: form.gradingScheme === 'absolute' ? '#3B82F6' : '#D1D5DB' }}>
+                    <input
+                      type="radio"
+                      name="gradingScheme"
+                      value="absolute"
+                      checked={form.gradingScheme === 'absolute'}
+                      onChange={(e) => setForm({ ...form, gradingScheme: e.target.value })}
+                      className="mt-1 mr-3"
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-800">Absolute (Custom Ranges)</div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Set fixed percentage ranges for each grade. 
+                        You can customize these ranges in the Grade Management section.
+                      </p>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               {/* Grading Policy */}

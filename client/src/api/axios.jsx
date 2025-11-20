@@ -54,6 +54,15 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Handle 401 Unauthorized - token expired or invalid
+    if (error.response?.status === 401) {
+      console.warn('🔒 Unauthorized - clearing token and redirecting to login');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+      return Promise.reject(error);
+    }
+    
     if (error.code === 'ERR_NETWORK' || error.message.includes('CORS')) {
       console.error('🚫 Network/CORS Error:', {
         message: error.message,

@@ -5,7 +5,8 @@ const Course = {
   async create(courseData) {
     const {
       name, code, description, professor,
-      policy = {}, maxMarks = {}, quizCount = 0, assignmentCount = 0
+      policy = {}, maxMarks = {}, quizCount = 0, assignmentCount = 0,
+      gradingScheme = 'relative'
     } = courseData;
 
     const result = await pool.query(
@@ -13,14 +14,15 @@ const Course = {
         name, code, description, professor_id,
         policy_midsem, policy_endsem, policy_quizzes, policy_project,
         policy_assignment, policy_attendance, policy_participation,
-        quiz_count, assignment_count
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        quiz_count, assignment_count, grading_scheme
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         name, code, description, professor,
         policy.midsem || 0, policy.endsem || 0, policy.quizzes || 0,
         policy.project || 0, policy.assignment || 0, policy.attendance || 0,
-        policy.participation || 0, quizCount, assignmentCount
+        policy.participation || 0, quizCount, assignmentCount,
+        gradingScheme || 'relative'
       ]
     );
 
@@ -219,6 +221,7 @@ export const enhanceCourse = (row) => {
     quizCount: row.quiz_count || 0,
     assignmentCount: row.assignment_count || 0,
     letterGradesPublished: row.letter_grades_published || false,
+    gradingScheme: row.grading_scheme || 'relative',
     gradingScale: row.grading_scale || {
       "A+": { min: 95, max: 100 },
       "A": { min: 90, max: 94.99 },
