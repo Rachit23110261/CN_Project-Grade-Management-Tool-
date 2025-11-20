@@ -8,26 +8,10 @@ const getApiBaseUrl = () => {
   }
   
   const protocol = window.location.protocol; // 'http:' or 'https:'
-  const hostname = window.location.hostname;
   
-  // If running on 127.0.0.1, try to use the network IP for API
-  if (hostname === '127.0.0.1' || hostname === 'localhost') {
-    // Try common network IPs first
-    const networkIPs = ['10.7.4.228', '10.7.45.10', '192.168.1.1', 'localhost'];
-    
-    // For HTTPS, prefer the same network IP that might be running the backend
-    if (protocol === 'https:') {
-      // Check if we're on a known network IP, try that first
-      for (const ip of networkIPs) {
-        if (hostname === ip || hostname === '127.0.0.1') {
-          return `${protocol}//${networkIPs[0]}:5000/api`; // Use first network IP
-        }
-      }
-    }
-  }
-  
-  // Default fallback - use same hostname as frontend
-  return `${protocol}//${hostname}:5000/api`;
+  // Always use localhost:5000 for backend to ensure consistent SSL certificate
+  // This works whether you access frontend via localhost or IP address
+  return `${protocol}//localhost:5000/api`;
 };
 
 const baseURL = getApiBaseUrl();
