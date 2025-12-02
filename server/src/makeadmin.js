@@ -12,7 +12,7 @@ const createAdmin = async () => {
       `INSERT INTO users (name, email, password, role) 
        VALUES ($1, $2, $3, $4) 
        ON CONFLICT (email) DO UPDATE 
-       SET password = $4, name = $1
+       SET password = $3, name = $1
        RETURNING id, name, email, role, created_at`,
       ["Super Admin", "admin@iitgn.ac.in", hashedPassword, "admin"]
     );

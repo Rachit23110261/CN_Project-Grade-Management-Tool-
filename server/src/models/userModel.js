@@ -23,7 +23,7 @@ const User = {
         : filter.email;
       
       const result = await pool.query(
-        'SELECT * FROM users WHERE LOWER(email) = LOWER($1)',
+        'SELECT id, name, email, password, role, temp_password, temp_password_expires, created_at, updated_at FROM users WHERE LOWER(email) = LOWER($1)',
         [emailPattern]
       );
       return result.rows[0] || null;
